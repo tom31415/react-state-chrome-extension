@@ -12,9 +12,29 @@ export function installReactHook(onCommit) {
 
   const existing = window.__REACT_DEVTOOLS_GLOBAL_HOOK__;
   if (existing) {
+    // Another devtools (usually React DevTools) owns the hook. Read its
+    // renderers and tap its commit callback so we still learn about live
+    // fiber roots — the DOM scan alone misses trees rooted at <html>
+    // synthesized portals, etc.
     state.hookMode = 'external';
     if (existing.renderers && typeof existing.renderers.forEach === 'function') {
       state.renderers = existing.renderers;
+    }
+    try {
+      const originalCommit = existing.onCommitFiberRoot;
+      existing.onCommitFiberRoot = function (id, root, ...rest) {
+        try {
+          if (root) state.fiberRoots.add(root);
+          if (onCommit) onCommit();
+        } catch {
+          // never break the host hook
+        }
+        return typeof originalCommit === 'function'
+          ? originalCommit.call(this, id, root, ...rest)
+          : undefined;
+      };
+    } catch {
+      // hook object is frozen; DOM scanning remains the fallback
     }
     return state;
   }

@@ -46,10 +46,18 @@ import { showHighlight, hideHighlight } from './overlay.js';
 
   const picker = createPicker({
     onPick(comp, node) {
-      const id = String(nextComponentId++);
-      components.set(id, { comp, node });
       send({ type: 'pick-state', picking: false });
-      sendComponent(id);
+      try {
+        const id = String(nextComponentId++);
+        components.set(id, { comp, node });
+        sendComponent(id);
+      } catch (err) {
+        send({
+          type: 'error',
+          inResponseTo: 'pick',
+          message: `Could not read the selected component: ${String((err && err.message) || err)}`,
+        });
+      }
     },
     onCancel(reason) {
       send({ type: 'pick-state', picking: false, reason: reason || null });

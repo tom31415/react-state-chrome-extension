@@ -260,8 +260,10 @@ function topmost(refObj) {
 export function findReactRootsInDom(maxElements = 20000) {
   const roots = [];
   const seen = new Set();
-  if (!document.body) return roots;
-  const all = document.querySelectorAll('body, body *');
+  if (!document.documentElement) return roots;
+  // Include <html>: Next.js app router (and any hydrateRoot(document) app)
+  // renders the whole document, so the topmost react-keyed element is <html>.
+  const all = document.querySelectorAll('*');
   let count = 0;
   for (const el of all) {
     if (++count > maxElements) break;

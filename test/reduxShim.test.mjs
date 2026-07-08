@@ -100,6 +100,46 @@ test('shim compose called with options object still works', () => {
   assert.deepEqual(store.getState(), { count: 0 });
 });
 
+test('shim survives Redux DevTools assigning over it AFTER install', () => {
+  const win = {};
+  const registered = [];
+  installReduxShim((s) => registered.push(s), win);
+
+  // The real Redux DevTools loads later and assigns both globals.
+  const prevCalls = [];
+  win.__REDUX_DEVTOOLS_EXTENSION__ = (options) => {
+    prevCalls.push(options);
+    return (next) => (...args) => next(...args);
+  };
+  // Reading back still returns OUR wrapper (accessor property)…
+  const store = createStore(counter, win.__REDUX_DEVTOOLS_EXTENSION__({ name: 'late' }));
+  // …which chains to theirs AND registers with us.
+  assert.equal(prevCalls.length, 1);
+  assert.deepEqual(prevCalls[0], { name: 'late' });
+  assert.equal(registered.length, 1);
+  store.dispatch({ type: OVERRIDE_ACTION, state: { count: 5 } });
+  assert.deepEqual(store.getState(), { count: 5 });
+});
+
+test('compose factory chains a late-assigned devtools compose', () => {
+  const win = {};
+  const registered = [];
+  installReduxShim((s) => registered.push(s), win);
+
+  let theirComposeUsed = 0;
+  win.__REDUX_DEVTOOLS_EXTENSION_COMPOSE__ = () => (...fns) => {
+    theirComposeUsed++;
+    return (x) => fns.reduceRight((acc, f) => f(acc), x);
+  };
+  const passthrough = (next) => (...args) => next(...args);
+  const composed = win.__REDUX_DEVTOOLS_EXTENSION_COMPOSE__(passthrough);
+  const store = createStore(counter, composed);
+  assert.equal(theirComposeUsed, 1);
+  assert.equal(registered.length, 1);
+  store.dispatch({ type: OVERRIDE_ACTION, state: { count: 4 } });
+  assert.deepEqual(store.getState(), { count: 4 });
+});
+
 test('shim chains to a pre-existing devtools extension', () => {
   const prevCalls = [];
   const win = {

@@ -216,7 +216,7 @@ function renderComponent() {
     const empty = document.createElement('div');
     empty.className = 'empty';
     empty.textContent =
-      'No component selected. Click "Pick component", then click any element on the page.';
+      'No component selected. Click "Element selector", then hover the page — elements highlight like the Chrome inspector — and click one to inspect its React component.';
     view.appendChild(empty);
     return;
   }
@@ -292,7 +292,9 @@ function addSection(parent, name, fill) {
 function renderPickButton() {
   const btn = $('#pick');
   btn.classList.toggle('active', state.picking);
-  btn.textContent = state.picking ? '⌖ Picking… (Esc to cancel)' : '⌖ Pick component';
+  btn.textContent = state.picking
+    ? '⌖ Selecting… (click an element, Esc to cancel)'
+    : '⌖ Element selector';
 }
 
 // ---------- toasts ----------

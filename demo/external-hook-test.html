@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Agent smoke test (external React DevTools hook simulated)</title>
+    <script>
+      // Simulates the React DevTools extension having claimed the global hook
+      // BEFORE our agent runs (the common case for React developers).
+      window.__REACT_DEVTOOLS_GLOBAL_HOOK__ = {
+        renderers: new Map(),
+        supportsFiber: true,
+        isDisabled: false,
+        _id: 0,
+        inject(renderer) {
+          const id = ++this._id;
+          this.renderers.set(id, renderer);
+          return id;
+        },
+        onCommitFiberRoot() {},
+        onCommitFiberUnmount() {},
+        onPostCommitFiberRoot() {},
+        checkDCE() {},
+        on() {},
+        off() {},
+        sub() {
+          return () => {};
+        },
+        emit() {},
+      };
+    </script>
+    <script src="../dist/page-agent.js"></script>
+    <script crossorigin="anonymous" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" src="https://unpkg.com/react@18.3.1/umd/react.development.js"></script>
+    <script crossorigin="anonymous" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js"></script>
+    <script crossorigin="anonymous" integrity="sha384-ME6tSOuR9paPKtP9K+mrPCHdkGJch/V4T4FBYB64Rsns3yJF3jhx83W1+JpoJSIb" src="https://unpkg.com/redux@4.2.1/dist/redux.js"></script>
+    <script crossorigin="anonymous" integrity="sha384-SolceUhVnIawRDbgCOJYlDOxNY288CfgrFwenvmpC4S9ucmE/Sd+rBLIKeoI/3u1" src="https://unpkg.com/react-redux@8.1.3/dist/react-redux.min.js"></script>
+    <script>
+      window.__collected = [];
+      window.addEventListener('message', (e) => {
+        if (e.source === window && e.data && e.data.__rri === 'to-panel') {
+          window.__collected.push(e.data.msg);
+        }
+      });
+      window.__toAgent = (msg) => window.postMessage({ __rri: 'to-agent', msg }, '*');
+    </script>
+  </head>
+  <body>
+    <h1>Agent smoke test — external hook mode</h1>
+    <div id="root"></div>
+    <script src="app.js"></script>
+  </body>
+</html>

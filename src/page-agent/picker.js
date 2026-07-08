@@ -29,7 +29,22 @@ export function createPicker({ onPick, onCancel }) {
     const t = e.target;
     if (!(t instanceof Element) || t.hasAttribute('data-rri-overlay')) return;
     current = resolve(t);
-    showHighlight(t, current ? `<${current.name}>` : '(no React component)');
+    // Chrome-inspector-style label: element, dimensions, owning component.
+    const rect = t.getBoundingClientRect();
+    const dims = `${round1(rect.width)} × ${round1(rect.height)}`;
+    let tag = t.tagName.toLowerCase();
+    if (t.id) tag += `#${t.id}`;
+    else if (typeof t.className === 'string' && t.className.trim()) {
+      tag += '.' + t.className.trim().split(/\s+/)[0];
+    }
+    showHighlight(
+      t,
+      current ? `<${current.name}>  ${tag} | ${dims}` : `${tag} | ${dims}  (not a React element)`
+    );
+  }
+
+  function round1(n) {
+    return Math.round(n * 10) / 10;
   }
 
   function onClick(e) {

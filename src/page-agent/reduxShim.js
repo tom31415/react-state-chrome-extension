@@ -1,7 +1,12 @@
 // Shims window.__REDUX_DEVTOOLS_EXTENSION__ / __REDUX_DEVTOOLS_EXTENSION_COMPOSE__
 // at document_start. Any store created through them registers with us (tier 1)
 // and gets its reducer wrapped to honor the OVERRIDE_ACTION, which makes live
-// state edits persistent. Chains to the real Redux DevTools if present.
+// state edits persistent.
+//
+// The real Redux DevTools extension also claims these globals at document_start
+// and the load order is not guaranteed, so both are installed as accessor
+// properties: if Redux DevTools assigns over us later, the setter captures its
+// implementation and we chain to it — both tools keep working.
 
 export const OVERRIDE_ACTION = '@@RRI/OVERRIDE_STATE';
 
@@ -25,46 +30,97 @@ const compose = (...fns) => (x) => fns.reduceRight((acc, f) => f(acc), x);
 export function installReduxShim(register, win = window) {
   const enhancer = createInspectorEnhancer(register);
 
-  const prev = win.__REDUX_DEVTOOLS_EXTENSION__;
+  let chainedExt =
+    typeof win.__REDUX_DEVTOOLS_EXTENSION__ === 'function'
+      ? win.__REDUX_DEVTOOLS_EXTENSION__
+      : null;
+  let chainedComposeFactory =
+    typeof win.__REDUX_DEVTOOLS_EXTENSION_COMPOSE__ === 'function'
+      ? win.__REDUX_DEVTOOLS_EXTENSION_COMPOSE__
+      : null;
+
   const ext = (options) => {
-    if (typeof prev === 'function') {
-      const prevEnhancer = prev(options);
-      return (createStore) => enhancer(prevEnhancer(createStore));
+    if (chainedExt) {
+      try {
+        const theirEnhancer = chainedExt(options);
+        if (typeof theirEnhancer === 'function') {
+          return (createStore) => enhancer(theirEnhancer(createStore));
+        }
+      } catch {
+        // a broken chained devtools must not take ours down
+      }
     }
     return enhancer;
   };
-  if (prev && typeof prev === 'function') {
-    for (const key of Object.keys(prev)) {
-      const v = prev[key];
-      ext[key] = typeof v === 'function' ? v.bind(prev) : v;
-    }
-  } else {
-    // Libraries like zustand's devtools middleware call connect() directly;
-    // give them inert stubs so pages keep working.
-    ext.connect = () => ({
-      init() {},
-      send() {},
-      subscribe() {
-        return () => {};
-      },
-      unsubscribe() {},
-      error() {},
-    });
-    ext.disconnect = () => {};
-    ext.send = () => {};
-    ext.listen = () => {};
-    ext.notifyErrors = () => {};
-  }
-  win.__REDUX_DEVTOOLS_EXTENSION__ = ext;
 
-  win.__REDUX_DEVTOOLS_EXTENSION_COMPOSE__ = (...args) => {
-    if (args.length === 0) return ext();
-    if (args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
-      const options = args[0];
-      return (...fns) => compose(...fns, ext(options));
+  // Methods some libraries call directly (e.g. zustand devtools middleware):
+  // delegate to the chained extension when one appears, otherwise inert stubs.
+  const delegate = (method, fallback) => (...args) => {
+    if (chainedExt && typeof chainedExt[method] === 'function') {
+      return chainedExt[method](...args);
     }
-    return compose(...args, ext());
+    return fallback(...args);
+  };
+  ext.connect = delegate('connect', () => ({
+    init() {},
+    send() {},
+    subscribe() {
+      return () => {};
+    },
+    unsubscribe() {},
+    error() {},
+  }));
+  ext.disconnect = delegate('disconnect', () => {});
+  ext.send = delegate('send', () => {});
+  ext.listen = delegate('listen', () => {});
+  ext.notifyErrors = delegate('notifyErrors', () => {});
+  ext.open = delegate('open', () => {});
+
+  const buildCompose = (fns, options) => {
+    if (chainedComposeFactory) {
+      try {
+        const theirCompose =
+          options === undefined ? chainedComposeFactory() : chainedComposeFactory(options);
+        if (typeof theirCompose === 'function') {
+          // Their compose appends their enhancer; we append only our plain
+          // enhancer to avoid chaining theirs twice.
+          return theirCompose(...fns, enhancer);
+        }
+      } catch {
+        // fall through to our own compose
+      }
+    }
+    return compose(...fns, ext(options));
   };
 
+  const composeFactory = (...args) => {
+    if (args.length === 0) return (...fns) => buildCompose(fns, undefined);
+    if (args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
+      const options = args[0];
+      return (...fns) => buildCompose(fns, options);
+    }
+    return buildCompose(args, undefined);
+  };
+
+  defineChaining(win, '__REDUX_DEVTOOLS_EXTENSION__', ext, (v) => {
+    if (typeof v === 'function' && v !== ext) chainedExt = v;
+  });
+  defineChaining(win, '__REDUX_DEVTOOLS_EXTENSION_COMPOSE__', composeFactory, (v) => {
+    if (typeof v === 'function' && v !== composeFactory) chainedComposeFactory = v;
+  });
+
   return ext;
+}
+
+function defineChaining(win, name, value, onAssign) {
+  try {
+    Object.defineProperty(win, name, {
+      configurable: true,
+      enumerable: true,
+      get: () => value,
+      set: onAssign,
+    });
+  } catch {
+    win[name] = value;
+  }
 }
