@@ -1,0 +1,25 @@
+- generic [active] [ref=e1]:
+  - heading "Agent smoke test" [level=1] [ref=e2]
+  - paragraph [ref=e3]:
+    - text: Drive with
+    - code [ref=e4]: "__toAgent({type:'init'})"
+    - text: etc.; inspect
+    - code [ref=e5]: __collected
+    - text: .
+  - generic [ref=e6]:
+    - generic [ref=e7]:
+      - heading "ClassCounter (class component, local state)" [level=2] [ref=e8]
+      - paragraph [ref=e9]: "Local clicks: 0 — theme: blue"
+      - button "Click me" [ref=e10]
+    - generic [ref=e11]:
+      - heading "HookCounter (hooks + react-redux)" [level=2] [ref=e12]
+      - paragraph [ref=e13]: "Redux count: 0 — local value: 10 (doubled: 20)"
+      - button "Redux +" [ref=e14]
+      - button "Redux −" [ref=e15]
+      - button "Local +" [ref=e16]
+    - generic [ref=e17]:
+      - heading "TodoList (second store via Provider)" [level=2] [ref=e18]
+      - list [ref=e19]:
+        - listitem [ref=e20]: learn redux
+        - listitem [ref=e21]: inspect state
+      - button "Add todo" [ref=e22]

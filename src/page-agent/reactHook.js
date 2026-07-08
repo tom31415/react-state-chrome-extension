@@ -1,0 +1,75 @@
+// Installs a minimal __REACT_DEVTOOLS_GLOBAL_HOOK__ when none exists, so React
+// (15+) registers its renderer with us and React 16+ reports fiber roots on
+// every commit. If the real React DevTools hook is already installed we leave
+// it alone and read what we can from it; DOM scanning covers the rest.
+
+export function installReactHook(onCommit) {
+  const state = {
+    renderers: new Map(),
+    fiberRoots: new Set(),
+    hookMode: 'ours',
+  };
+
+  const existing = window.__REACT_DEVTOOLS_GLOBAL_HOOK__;
+  if (existing) {
+    state.hookMode = 'external';
+    if (existing.renderers && typeof existing.renderers.forEach === 'function') {
+      state.renderers = existing.renderers;
+    }
+    return state;
+  }
+
+  let uid = 0;
+  const hook = {
+    renderers: state.renderers,
+    supportsFiber: true,
+    isDisabled: false,
+    inject(renderer) {
+      const id = ++uid;
+      state.renderers.set(id, renderer);
+      return id;
+    },
+    onCommitFiberRoot(_id, root) {
+      if (root) state.fiberRoots.add(root);
+      if (onCommit) onCommit();
+    },
+    onCommitFiberUnmount() {},
+    onScheduleFiberRoot() {},
+    onPostCommitFiberRoot() {},
+    checkDCE() {},
+    on() {},
+    off() {},
+    emit() {},
+    sub() {
+      return () => {};
+    },
+    getFiberRoots() {
+      return state.fiberRoots;
+    },
+  };
+
+  try {
+    Object.defineProperty(window, '__REACT_DEVTOOLS_GLOBAL_HOOK__', {
+      configurable: true,
+      enumerable: false,
+      value: hook,
+      writable: true,
+    });
+  } catch {
+    state.hookMode = 'none';
+  }
+  return state;
+}
+
+export function getRendererVersions(state) {
+  const versions = [];
+  try {
+    state.renderers.forEach((renderer) => {
+      if (renderer && renderer.version) versions.push(String(renderer.version));
+      else versions.push('unknown');
+    });
+  } catch {
+    // renderers of an external hook may not be iterable
+  }
+  return versions;
+}

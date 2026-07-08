@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Agent smoke test (page agent preloaded)</title>
+    <!-- The built page agent loads FIRST, standing in for the document_start
+         MAIN-world content script. Build with `npm run build` before opening. -->
+    <script src="../dist/page-agent.js"></script>
+    <script crossorigin="anonymous" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" src="https://unpkg.com/react@18.3.1/umd/react.development.js"></script>
+    <script crossorigin="anonymous" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js"></script>
+    <script crossorigin="anonymous" integrity="sha384-ME6tSOuR9paPKtP9K+mrPCHdkGJch/V4T4FBYB64Rsns3yJF3jhx83W1+JpoJSIb" src="https://unpkg.com/redux@4.2.1/dist/redux.js"></script>
+    <script crossorigin="anonymous" integrity="sha384-SolceUhVnIawRDbgCOJYlDOxNY288CfgrFwenvmpC4S9ucmE/Sd+rBLIKeoI/3u1" src="https://unpkg.com/react-redux@8.1.3/dist/react-redux.min.js"></script>
+    <script>
+      // Collect agent -> panel traffic so a test driver (or a human in the
+      // console) can assert on it: window.__collected
+      window.__collected = [];
+      window.addEventListener('message', (e) => {
+        if (e.source === window && e.data && e.data.__rri === 'to-panel') {
+          window.__collected.push(e.data.msg);
+        }
+      });
+      window.__toAgent = (msg) => window.postMessage({ __rri: 'to-agent', msg }, '*');
+    </script>
+  </head>
+  <body>
+    <h1>Agent smoke test</h1>
+    <p>Drive with <code>__toAgent({type:'init'})</code> etc.; inspect <code>__collected</code>.</p>
+    <div id="root"></div>
+    <script src="app.js"></script>
+  </body>
+</html>
