@@ -74,6 +74,64 @@ test('ephemeral edit patches getState, pokes subscribers, and clears on real dis
   assert.deepEqual(store.getState(), { user: { name: 'real', age: 1 } });
 });
 
+test('ephemeral override clears when middleware-internal dispatch changes real state', () => {
+  const registry = createStoreRegistry(() => {}, () => true);
+  const store = makeStore({ n: 1 });
+  // Middleware closures capture the enhanced dispatch BEFORE our edit patches
+  // store.dispatch — simulate that with a pre-edit reference.
+  const middlewareDispatch = store.dispatch;
+  const id = registry.register(store, { tier: 3 });
+
+  registry.edit(id, ['n'], 999);
+  assert.deepEqual(store.getState(), { n: 999 }, 'override active');
+
+  middlewareDispatch({ type: 'set', state: { n: 2 } });
+  assert.deepEqual(store.getState(), { n: 2 }, 'override cleared by real state change');
+});
+
+test('ephemeral override survives its own notify but respects later edits', () => {
+  const registry = createStoreRegistry(() => {}, () => true);
+  const store = makeStore({ n: 1 });
+  const id = registry.register(store, { tier: 3 });
+  registry.edit(id, ['n'], 10);
+  registry.edit(id, ['n'], 20);
+  assert.deepEqual(store.getState(), { n: 20 });
+});
+
+test('registering while a panel is active pushes the initial state', () => {
+  const sent = [];
+  const registry = createStoreRegistry((m) => sent.push(m), () => true);
+  registry.register(makeStore({ hello: 1 }), { tier: 3 });
+  const push = sent.filter((m) => m.type === 'store-state');
+  assert.equal(push.length, 1);
+  assert.deepEqual(push[0].state, { hello: 1 });
+});
+
+test('distinct instances sharing a prototype getState are NOT conflated', () => {
+  class ProtoStore {
+    constructor(s) {
+      this._s = s;
+      this._l = [];
+    }
+    getState() {
+      return this._s;
+    }
+    dispatch(a) {
+      for (const l of this._l) l();
+      return a;
+    }
+    subscribe(l) {
+      this._l.push(l);
+      return () => {};
+    }
+  }
+  const registry = createStoreRegistry(() => {}, () => false);
+  const a = registry.register(new ProtoStore({ a: 1 }), { tier: 2 });
+  const b = registry.register(new ProtoStore({ b: 2 }), { tier: 2 });
+  assert.notEqual(a, b);
+  assert.equal(registry.list().length, 2);
+});
+
 test('edit on an unknown store id throws', () => {
   const registry = createStoreRegistry(() => {}, () => true);
   assert.throws(() => registry.edit('42', [], {}), /Unknown store/);

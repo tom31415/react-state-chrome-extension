@@ -41,15 +41,19 @@ function throttle(fn, ms) {
 
 export function createStoreRegistry(send, isActive) {
   const entries = new Map(); // id -> entry
-  // Keyed by the store's getState function: enhancers like applyMiddleware
-  // return a NEW object spreading the original store, so object identity would
-  // register the same store twice — getState is shared across those wrappers.
+  // Enhancers like applyMiddleware return a NEW object spreading the original
+  // store, so object identity would register the same store twice — those
+  // wrappers share the same own `getState` function, so key on it. But a
+  // getState inherited from a prototype is shared across DISTINCT instances,
+  // so fall back to the store object itself in that case.
   const byStore = new WeakMap();
+  const dedupeKey = (store) =>
+    Object.prototype.hasOwnProperty.call(store, 'getState') ? store.getState : store;
   let nextId = 1;
 
   function register(store, { tier = 3, label = null } = {}) {
     if (!isStoreLike(store)) return null;
-    const existingId = byStore.get(store.getState);
+    const existingId = byStore.get(dedupeKey(store));
     if (existingId !== undefined) {
       const existing = entries.get(existingId);
       if (existing) {
@@ -74,13 +78,16 @@ export function createStoreRegistry(send, isActive) {
       realDispatch: null,
     };
     entries.set(id, entry);
-    byStore.set(store.getState, id);
+    byStore.set(dedupeKey(store), id);
     try {
       store.subscribe(throttle(() => pushState(entry), 150));
     } catch {
       // a store that can't be subscribed to still shows a snapshot on demand
     }
-    if (isActive()) send({ type: 'stores', stores: list() });
+    if (isActive()) {
+      send({ type: 'stores', stores: list() });
+      pushState(entry);
+    }
     return id;
   }
 
@@ -143,11 +150,25 @@ export function createStoreRegistry(send, isActive) {
         }
         return entry.realDispatch(action);
       };
+      // Middleware chains (thunks, sagas) capture the enhanced dispatch in a
+      // closure and never go through the patched store.dispatch above, so also
+      // watch the real state: the moment it moves off the snapshot the override
+      // was computed from, the override is stale — drop it.
+      try {
+        store.subscribe(() => {
+          if (entry.override !== UNSET && entry.realGetState() !== entry.baseState) {
+            entry.override = UNSET;
+          }
+        });
+      } catch {
+        // unsubscribable store: dispatch patching remains the only clearer
+      }
       entry.patched = true;
       // getState was just replaced; alias the new function so a rescan still
       // dedupes this store.
-      byStore.set(store.getState, entry.id);
+      byStore.set(dedupeKey(store), entry.id);
     }
+    entry.baseState = entry.realGetState();
     entry.override = newState;
     // Poke subscribers so connected components re-read (patched) getState.
     entry.realDispatch({ type: NOTIFY_ACTION });

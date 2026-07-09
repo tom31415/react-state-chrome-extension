@@ -5,6 +5,7 @@ import {
   nearestComposite,
   describeComponent,
   toCurrentFiber,
+  getHostNode,
 } from '../src/page-agent/fibers.js';
 
 class FakeClass {
@@ -122,7 +123,39 @@ test('describeComponent resolves the current fiber generation after a re-render'
   assert.deepEqual(info.state, { clicks: 42 });
 });
 
-test('nearestComposite follows the owner chain for React 15 host instances', () => {
+function legacyTree() {
+  // TopLevelWrapper -> App -> Layout -> host div (div created by App via a
+  // children prop, so its element _owner is App even though Layout is the
+  // structural parent).
+  function App() {}
+  function Layout() {}
+  const wrapper = { _currentElement: { type: function TopLevelWrapper() {} } };
+  const app = { _currentElement: { type: App, _owner: null } };
+  const layout = { _currentElement: { type: Layout, _owner: app } };
+  const hostDiv = {
+    _currentElement: { type: 'div', props: {}, _owner: app },
+    _hostContainerInfo: { _topLevelWrapper: wrapper },
+  };
+  wrapper._renderedComponent = app;
+  app._renderedComponent = layout;
+  layout._renderedComponent = hostDiv;
+  return { wrapper, app, layout, hostDiv };
+}
+
+test('React 15: nearestComposite returns the structural parent, not the element owner', () => {
+  const { layout, hostDiv } = legacyTree();
+  const found = nearestComposite({ kind: 'legacy', ref: hostDiv });
+  assert.equal(found.ref, layout, 'children-prop element resolves to Layout, not creator App');
+});
+
+test('React 15: hoisted elements (owner null) still resolve via the tree walk', () => {
+  const { layout, hostDiv } = legacyTree();
+  hostDiv._currentElement._owner = null; // module-scope / constant-hoisted element
+  const found = nearestComposite({ kind: 'legacy', ref: hostDiv });
+  assert.equal(found.ref, layout);
+});
+
+test('React 15: detached instances fall back to the owner chain', () => {
   const owner = {
     _currentElement: { type: Named, props: {}, _owner: null },
     _instance: new FakeClass(),
@@ -130,4 +163,25 @@ test('nearestComposite follows the owner chain for React 15 host instances', () 
   const hostInst = { _currentElement: { type: 'div', props: {}, _owner: owner } };
   const found = nearestComposite({ kind: 'legacy', ref: hostInst });
   assert.equal(found.ref, owner);
+});
+
+test('getHostNode returns the first host descendant in tree (DFS) order', () => {
+  const shallowLate = { tag: 5, stateNode: 'LATE', child: null, sibling: null, return: null };
+  const deepFirst = { tag: 5, stateNode: 'FIRST', child: null, sibling: null, return: null };
+  const inner = { tag: 0, type: Named, stateNode: null, child: deepFirst, sibling: shallowLate, return: null };
+  const root = { tag: 0, type: Named, stateNode: null, child: inner, sibling: null, return: null, alternate: null };
+  deepFirst.return = inner;
+  inner.return = root;
+  shallowLate.return = root;
+  // BFS would visit shallowLate (depth 2) before deepFirst (depth 2 via child) —
+  // ordering by tree position must pick FIRST.
+  assert.equal(getHostNode({ kind: 'fiber', ref: root }), 'FIRST');
+});
+
+test('getHostNode highlights the parent element for text-only components', () => {
+  const parent = { name: 'parentEl' };
+  const textFiber = { tag: 6, stateNode: { parentElement: parent }, child: null, sibling: null, return: null };
+  const root = { tag: 0, type: Named, stateNode: null, child: textFiber, sibling: null, return: null, alternate: null };
+  textFiber.return = root;
+  assert.equal(getHostNode({ kind: 'fiber', ref: root }), parent);
 });

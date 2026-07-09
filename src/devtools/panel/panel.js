@@ -17,17 +17,37 @@ const state = {
 };
 
 // ---------- connection ----------
+// The MV3 service worker is terminated when idle, which kills the port; the
+// panel must reconnect and re-register or it is permanently deaf.
 
-const port = chrome.runtime.connect({ name: 'rri-panel' });
-port.postMessage({ type: 'panel-init', tabId: chrome.devtools.inspectedWindow.tabId });
+let port = null;
 
-function sendToAgent(msg) {
-  port.postMessage(msg);
+function connect() {
+  port = chrome.runtime.connect({ name: 'rri-panel' });
+  port.postMessage({ type: 'panel-init', tabId: chrome.devtools.inspectedWindow.tabId });
+  port.onMessage.addListener(onPortMessage);
+  port.onDisconnect.addListener(() => {
+    port = null;
+    setTimeout(() => {
+      connect();
+      sendToAgent({ type: 'init' });
+    }, 100);
+  });
 }
 
-port.onMessage.addListener((msg) => {
+function sendToAgent(msg) {
+  if (!port) return;
+  try {
+    port.postMessage(msg);
+  } catch {
+    port = null;
+  }
+}
+
+function onPortMessage(msg) {
   switch (msg.type) {
     case 'agent-ready':
+    case 'bridge-ready':
       state.stores = [];
       state.storeStates.clear();
       state.component = null;
@@ -76,8 +96,9 @@ port.onMessage.addListener((msg) => {
       toast(msg.message, 'error');
       break;
   }
-});
+}
 
+connect();
 sendToAgent({ type: 'init' });
 
 // ---------- trees ----------

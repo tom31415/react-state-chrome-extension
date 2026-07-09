@@ -192,4 +192,10 @@ import { showHighlight, hideHighlight } from './overlay.js';
   // Let an already-open panel know a fresh page is ready (deferred so the
   // content bridge, which also runs at document_start, is listening).
   setTimeout(() => send({ type: 'agent-ready' }), 0);
+
+  // Restored from the back/forward cache: the panel may be showing another
+  // page's data — announce again so it resets and re-inits.
+  window.addEventListener('pageshow', (event) => {
+    if (event.persisted) send({ type: 'agent-ready' });
+  });
 })();

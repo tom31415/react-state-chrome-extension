@@ -65,10 +65,35 @@ export function nearestComposite(refObj) {
     }
     return null;
   }
-  const inst = refObj.ref;
+  return nearestCompositeLegacy(refObj.ref);
+}
+
+// React 15 has no parent pointers, and element._owner is the CREATOR (null for
+// hoisted elements, wrong for children-prop elements), so walk the tree from
+// the root tracking the nearest composite ancestor — matching what the fiber
+// path's .return climb reports on React 16+.
+function nearestCompositeLegacy(inst) {
   const el = inst._currentElement;
-  if (el && typeof el.type === 'function') return refObj;
-  // Host instance: the composite that created this element.
+  if (el && typeof el.type === 'function') return { kind: 'legacy', ref: inst };
+  const root = topmost({ kind: 'legacy', ref: inst }).ref;
+  const stack = [[root, null]]; // [instance, nearest composite ancestor]
+  let n = 0;
+  while (stack.length && n++ < 50000) {
+    const [cur, ancestor] = stack.pop();
+    if (!cur || typeof cur !== 'object') continue;
+    const curEl = cur._currentElement;
+    const isComposite = !!(curEl && typeof curEl.type === 'function');
+    if (cur === inst) {
+      const found = isComposite ? cur : ancestor;
+      return found ? { kind: 'legacy', ref: found } : null;
+    }
+    const next = isComposite ? cur : ancestor;
+    if (cur._renderedComponent) stack.push([cur._renderedComponent, next]);
+    if (cur._renderedChildren && typeof cur._renderedChildren === 'object') {
+      for (const k in cur._renderedChildren) stack.push([cur._renderedChildren[k], next]);
+    }
+  }
+  // Tree walk failed (detached instance): fall back to the creator.
   if (el && el._owner) return { kind: 'legacy', ref: el._owner };
   return null;
 }
@@ -104,13 +129,22 @@ function extractHooks(fiber) {
 
 function describeHook(h, index) {
   const ms = h.memoizedState;
-  if (ms && typeof ms === 'object' && typeof ms.create === 'function' && 'deps' in ms) {
+  // useState/useReducer always carry a queue — check first so user state whose
+  // VALUE happens to look like an effect or ref object is not misclassified.
+  if (h.queue) return { index, kind: 'state', value: serialize(ms, 4) };
+  if (
+    ms &&
+    typeof ms === 'object' &&
+    typeof ms.create === 'function' &&
+    'deps' in ms &&
+    ('destroy' in ms || 'tag' in ms)
+  ) {
     return { index, kind: 'effect', value: null };
   }
   if (ms && typeof ms === 'object' && 'current' in ms && Object.keys(ms).length === 1) {
     return { index, kind: 'ref', value: serialize(ms.current, 4) };
   }
-  return { index, kind: h.queue ? 'state' : 'other', value: serialize(ms, 4) };
+  return { index, kind: 'other', value: serialize(ms, 4) };
 }
 
 // Fibers are double-buffered: after a re-render the fiber we captured may be
@@ -186,21 +220,24 @@ export function getPublicInstance(comp) {
 export function getHostNode(comp) {
   try {
     if (comp.kind === 'fiber') {
-      const queue = [toCurrentFiber(comp.ref)];
+      // Depth-first in child/sibling order: the FIRST host descendant in tree
+      // order is the element the component visually starts at.
+      const root = toCurrentFiber(comp.ref);
+      let node = root;
       let n = 0;
-      while (queue.length && n++ < 2000) {
-        const cur = queue.shift();
-        if (!cur) continue;
-        if ((cur.tag === HOST_COMPONENT || cur.tag === HOST_TEXT) && cur.stateNode) {
-          return cur.stateNode;
+      while (node && n++ < 5000) {
+        if (node.tag === HOST_COMPONENT && node.stateNode) return node.stateNode;
+        if (node.tag === HOST_TEXT && node.stateNode) {
+          // Text nodes have no getBoundingClientRect; highlight their parent.
+          return node.stateNode.parentElement || null;
         }
-        if (cur.child) {
-          let c = cur.child;
-          while (c) {
-            queue.push(c);
-            c = c.sibling;
-          }
+        if (node.child) {
+          node = node.child;
+          continue;
         }
+        while (node && node !== root && !node.sibling) node = node.return;
+        if (!node || node === root) return null;
+        node = node.sibling;
       }
       return null;
     }
@@ -245,6 +282,12 @@ function topmost(refObj) {
   if (refObj.kind === 'fiber') {
     let f = refObj.ref;
     while (f.return) f = f.return;
+    // DOM expandos keep pointing at the mount-time fiber; the FiberRoot's
+    // .current says which double-buffered generation is actually mounted.
+    const fiberRoot = f.stateNode;
+    if (fiberRoot && fiberRoot.current && (fiberRoot.current === f || fiberRoot.current === f.alternate)) {
+      f = fiberRoot.current;
+    }
     return { kind: 'fiber', ref: f };
   }
   const inst = refObj.ref;

@@ -3,6 +3,14 @@
 // every commit. If the real React DevTools hook is already installed we leave
 // it alone and read what we can from it; DOM scanning covers the rest.
 
+// A root unmount commits with an empty tree — drop it then so rescans don't
+// keep walking dead trees (and holding their detached DOM alive).
+function trackRoot(state, root) {
+  if (!root) return;
+  if (root.current && root.current.child === null) state.fiberRoots.delete(root);
+  else state.fiberRoots.add(root);
+}
+
 export function installReactHook(onCommit) {
   const state = {
     renderers: new Map(),
@@ -24,7 +32,7 @@ export function installReactHook(onCommit) {
       const originalCommit = existing.onCommitFiberRoot;
       existing.onCommitFiberRoot = function (id, root, ...rest) {
         try {
-          if (root) state.fiberRoots.add(root);
+          trackRoot(state, root);
           if (onCommit) onCommit();
         } catch {
           // never break the host hook
@@ -50,7 +58,7 @@ export function installReactHook(onCommit) {
       return id;
     },
     onCommitFiberRoot(_id, root) {
-      if (root) state.fiberRoots.add(root);
+      trackRoot(state, root);
       if (onCommit) onCommit();
     },
     onCommitFiberUnmount() {},
