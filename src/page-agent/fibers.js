@@ -4,6 +4,7 @@
 // A "comp" is `{ kind: 'fiber' | 'legacy', ref }`.
 
 import { serialize, describeElement } from '../shared/serialize.js';
+import { setIn } from '../shared/paths.js';
 
 const HOST_COMPONENT = 5;
 const HOST_TEXT = 6;
@@ -176,6 +177,11 @@ export function describeComponent(comp) {
     let kind = 'function';
     if (isClass) kind = 'class';
     else if (f.type && typeof f.type === 'object') kind = f.type.render ? 'forwardRef' : 'memo';
+    // Only a class instance exposes public, safe APIs (setState/forceUpdate)
+    // to make an edit take visible effect — function components have no
+    // supported way to force a targeted re-render, so their props (like
+    // their hooks) are read-only.
+    const canEdit = isClass && !!f.stateNode;
     return {
       name: getDisplayName(f.type),
       kind,
@@ -184,7 +190,8 @@ export function describeComponent(comp) {
       state: isClass ? serialize(f.memoizedState, 6) : null,
       hooks: isClass || typeof f.type === 'string' ? [] : extractHooks(f),
       key: f.key != null ? String(f.key) : null,
-      canEditState: isClass && !!f.stateNode,
+      canEditState: canEdit,
+      canEditProps: canEdit,
       ownerName: f._debugOwner ? getDisplayName(f._debugOwner.type) : null,
       source: f._debugSource
         ? `${f._debugSource.fileName}:${f._debugSource.lineNumber}`
@@ -195,21 +202,52 @@ export function describeComponent(comp) {
   const el = inst._currentElement;
   const pub = inst._instance;
   const isClass = !!(pub && typeof pub.setState === 'function' && pub.state !== undefined);
+  const canEdit = !!(pub && typeof pub.setState === 'function');
   return {
     name: getDisplayName(el && el.type),
-    kind: pub && typeof pub.setState === 'function' ? 'class' : 'function',
+    kind: canEdit ? 'class' : 'function',
     reactKind: 'legacy',
     props: serialize(el && el.props, 6),
     state: isClass ? serialize(pub.state, 6) : null,
     hooks: [],
     key: el && el.key != null ? String(el.key) : null,
-    canEditState: !!(pub && typeof pub.setState === 'function'),
+    canEditState: canEdit,
+    canEditProps: canEdit,
     ownerName:
       el && el._owner && el._owner._currentElement
         ? getDisplayName(el._owner._currentElement.type)
         : null,
     source: null,
   };
+}
+
+// Forces a synchronous re-render with edited props via the public
+// forceUpdate() API — no private reconciler internals needed. React's
+// development build calls Object.freeze() on every element's props, so the
+// original props object can never be mutated in place; a new object is built
+// with setIn (immutable) and every holder of the old reference — the
+// instance, and the fiber/element — is repointed to it, keeping them
+// consistent with each other for our own re-read (describeComponent, above).
+export function mutateComponentProps(comp, path, value) {
+  const instance = getPublicInstance(comp);
+  if (!instance || typeof instance.forceUpdate !== 'function') {
+    throw new Error('Only class component props can be edited.');
+  }
+  const current = instance.props;
+  if (!current || typeof current !== 'object') {
+    throw new Error('Component has no editable props object.');
+  }
+  const next = setIn(current, path, value);
+  instance.props = next;
+  if (comp.kind === 'fiber') {
+    const f = toCurrentFiber(comp.ref);
+    f.memoizedProps = next;
+    f.pendingProps = next;
+  } else {
+    const el = comp.ref._currentElement;
+    if (el) el.props = next;
+  }
+  instance.forceUpdate();
 }
 
 export function getPublicInstance(comp) {

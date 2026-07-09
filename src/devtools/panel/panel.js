@@ -265,8 +265,14 @@ function renderComponent() {
   meta.textContent = metaBits.join('  ·  ');
   view.appendChild(meta);
 
-  addSection(view, 'Props', (pane) => {
-    createTree(pane, { rootLabel: 'props' }).setData(c.props);
+  addSection(view, c.canEditProps ? 'Props (editable)' : 'Props', (pane) => {
+    createTree(pane, {
+      rootLabel: 'props',
+      onEdit: c.canEditProps
+        ? (path, json) => sendToAgent({ type: 'set-component-props', id: c.id, path, json })
+        : undefined,
+      onToast: toast,
+    }).setData(c.props);
   });
 
   if (c.state !== null) {

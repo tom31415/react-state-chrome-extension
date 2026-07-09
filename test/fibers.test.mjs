@@ -6,10 +6,14 @@ import {
   describeComponent,
   toCurrentFiber,
   getHostNode,
+  mutateComponentProps,
 } from '../src/page-agent/fibers.js';
 
 class FakeClass {
   setState() {}
+  forceUpdate() {
+    this.forceUpdateCalls = (this.forceUpdateCalls || 0) + 1;
+  }
 }
 FakeClass.prototype.isReactComponent = {};
 
@@ -48,6 +52,7 @@ test('describeComponent reads a function fiber with hooks', () => {
   assert.equal(info.name, 'Named');
   assert.equal(info.kind, 'function');
   assert.equal(info.canEditState, false);
+  assert.equal(info.canEditProps, false, 'function components: no safe way to force a re-render');
   assert.deepEqual(info.props, { title: 'hello' });
   assert.equal(info.hooks.length, 2);
   assert.equal(info.hooks[0].value, 41);
@@ -68,9 +73,54 @@ test('describeComponent reads a class fiber state', () => {
   const info = describeComponent({ kind: 'fiber', ref: fiber });
   assert.equal(info.kind, 'class');
   assert.equal(info.canEditState, true);
+  assert.equal(info.canEditProps, true, 'class components: forceUpdate() makes edits safely visible');
   assert.equal(info.key, 'k1');
   assert.deepEqual(info.state, { clicks: 3 });
   assert.deepEqual(info.hooks, []);
+});
+
+test('mutateComponentProps replaces the (frozen, as React dev builds do) props object rather than mutating it', () => {
+  const instance = new FakeClass();
+  const props = Object.freeze({ title: 'old', nested: { count: 1 } });
+  instance.props = props;
+  const fiber = {
+    tag: 1,
+    type: FakeClass,
+    return: null,
+    key: null,
+    memoizedProps: props, // same reference, as React normally sets up
+    pendingProps: props,
+    memoizedState: {},
+    stateNode: instance,
+  };
+  mutateComponentProps({ kind: 'fiber', ref: fiber }, ['nested', 'count'], 42);
+  assert.equal(instance.props.nested.count, 42);
+  assert.equal(fiber.memoizedProps.nested.count, 42, 'fiber memoizedProps stays in sync');
+  assert.equal(fiber.pendingProps.nested.count, 42, 'fiber pendingProps stays in sync');
+  assert.equal(instance.props, fiber.memoizedProps, 'instance and fiber point at the same new object');
+  assert.notEqual(instance.props, props, 'the original frozen object was replaced, not mutated');
+  assert.equal(props.nested.count, 1, 'the original frozen object is untouched');
+  assert.equal(instance.forceUpdateCalls, 1);
+});
+
+test('mutateComponentProps rejects function components (no instance/forceUpdate)', () => {
+  const fiber = { tag: 0, type: Named, return: null, memoizedProps: { a: 1 }, stateNode: null };
+  assert.throws(
+    () => mutateComponentProps({ kind: 'fiber', ref: fiber }, ['a'], 2),
+    /Only class component props/
+  );
+});
+
+test('mutateComponentProps works on a React 15 legacy instance, frozen props included', () => {
+  const pub = new FakeClass();
+  const props = Object.freeze({ label: 'hi' });
+  pub.props = props;
+  pub.state = {};
+  const inst = { _currentElement: { type: Named, props, key: null, _owner: null }, _instance: pub };
+  mutateComponentProps({ kind: 'legacy', ref: inst }, ['label'], 'bye');
+  assert.equal(pub.props.label, 'bye');
+  assert.equal(inst._currentElement.props.label, 'bye');
+  assert.equal(pub.forceUpdateCalls, 1);
 });
 
 test('describeComponent reads a React 15 internal instance', () => {
@@ -85,6 +135,7 @@ test('describeComponent reads a React 15 internal instance', () => {
   assert.equal(info.reactKind, 'legacy');
   assert.equal(info.kind, 'class');
   assert.equal(info.canEditState, true);
+  assert.equal(info.canEditProps, true);
   assert.deepEqual(info.props, { a: 1 });
   assert.deepEqual(info.state, { open: true });
 });

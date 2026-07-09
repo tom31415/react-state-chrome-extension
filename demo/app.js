@@ -33,7 +33,7 @@
     }
     render() {
       return e('section', { id: 'class-counter' },
-        e('h2', null, 'ClassCounter (class component, local state)'),
+        e('h2', null, `ClassCounter (${this.props.label})`),
         e('p', null, `Local clicks: ${this.state.clicks} — theme: ${this.state.theme.color}`),
         e('button', { onClick: () => this.setState({ clicks: this.state.clicks + 1 }) }, 'Click me')
       );
@@ -66,7 +66,7 @@
 
   function App() {
     return e(React.Fragment, null,
-      e(ClassCounter),
+      e(ClassCounter, { label: 'class component, local state' }),
       e(ReactRedux.Provider, { store: counterStore }, e(HookCounter, { label: 'hooks + react-redux' })),
       e(ReactRedux.Provider, { store: todoStore }, e(TodoList))
     );

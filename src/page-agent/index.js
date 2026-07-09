@@ -12,6 +12,7 @@ import {
   getPublicInstance,
   getHostNode,
   describeElement,
+  mutateComponentProps,
 } from './fibers.js';
 import { serialize } from '../shared/serialize.js';
 import { getIn, setIn } from '../shared/paths.js';
@@ -188,6 +189,13 @@ import { showHighlight, hideHighlight } from './overlay.js';
           // component unmounted between setState and callback
         }
       });
+    },
+    'set-component-props'(msg) {
+      const entry = components.get(msg.id);
+      if (!entry) throw new Error('Component reference is gone (page may have re-rendered).');
+      const value = JSON.parse(msg.json);
+      mutateComponentProps(entry.comp, msg.path, value);
+      sendComponent(msg.id);
     },
   };
 
