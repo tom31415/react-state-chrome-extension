@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Delayed mount (simulates a real app's bundle load time)</title>
+    <script src="../dist/page-agent.js"></script>
+    <script crossorigin="anonymous" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" src="https://unpkg.com/react@18.3.1/umd/react.development.js"></script>
+    <script crossorigin="anonymous" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js"></script>
+    <script crossorigin="anonymous" integrity="sha384-ME6tSOuR9paPKtP9K+mrPCHdkGJch/V4T4FBYB64Rsns3yJF3jhx83W1+JpoJSIb" src="https://unpkg.com/redux@4.2.1/dist/redux.js"></script>
+    <script crossorigin="anonymous" integrity="sha384-SolceUhVnIawRDbgCOJYlDOxNY288CfgrFwenvmpC4S9ucmE/Sd+rBLIKeoI/3u1" src="https://unpkg.com/react-redux@8.1.3/dist/react-redux.min.js"></script>
+    <script>
+      window.__collected = [];
+      window.addEventListener('message', (e) => {
+        if (e.source === window && e.data && e.data.__rri === 'to-panel') window.__collected.push(e.data.msg);
+      });
+      window.__toAgent = (msg) => window.postMessage({ __rri: 'to-agent', msg }, '*');
+    </script>
+  </head>
+  <body>
+    <h1>Delayed mount</h1>
+    <div id="root"></div>
+    <script>
+      // Simulate a real SPA's bundle load + hydration time: the app doesn't
+      // create its store or render until well after document_start.
+      const delayMs = new URLSearchParams(location.search).get('delay') || '1200';
+      setTimeout(() => {
+        const script = document.createElement('script');
+        script.src = 'app.js';
+        document.body.appendChild(script);
+      }, Number(delayMs));
+    </script>
+  </body>
+</html>

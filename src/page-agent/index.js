@@ -32,7 +32,25 @@ import { showHighlight, hideHighlight } from './overlay.js';
     }
   }
 
-  const hookState = installReactHook(() => {});
+  // The panel's own 'init' (whether user-triggered or auto-sent on
+  // 'agent-ready') races the app's own bundle load/hydration and typically
+  // fires before the app has mounted anything — so that first scan usually
+  // finds nothing. Tier-1 (enhancer-registered) stores recover on their own
+  // (registry.register pushes an update the moment a store is created while
+  // active), but tier-3 (discovered via the React tree) stores are only ever
+  // found by an explicit scan. Re-scanning on a throttle after React commits
+  // — mounts, re-renders, SPA route changes — closes that gap.
+  let rescanScheduled = false;
+  function scheduleAutoRescan() {
+    if (!active || rescanScheduled) return;
+    rescanScheduled = true;
+    setTimeout(() => {
+      rescanScheduled = false;
+      if (active) scan();
+    }, 300);
+  }
+
+  const hookState = installReactHook(() => scheduleAutoRescan());
   const registry = createStoreRegistry(send, () => active);
   installReduxShim((store) => registry.register(store, { tier: 1 }));
 
