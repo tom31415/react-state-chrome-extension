@@ -155,6 +155,17 @@ main > section { flex: 1; overflow: auto; }
   outline: none;
 }
 #component-search:focus { border-bottom-color: var(--accent); }
+#component-focus-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  font-size: 11px;
+}
+#component-focus-label { color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+#component-focus-clear { padding: 1px 8px; font-size: 11px; }
 #component-tree {
   flex: 1;
   overflow: auto;
@@ -165,6 +176,14 @@ main > section { flex: 1; overflow: auto; }
 .component-row { display: flex; align-items: center; gap: 6px; min-height: 20px; border-radius: 3px; cursor: pointer; }
 .component-row:hover { background: color-mix(in srgb, var(--accent) 8%, transparent); }
 .component-row.selected { background: color-mix(in srgb, var(--accent) 18%, transparent); outline: 1px solid var(--accent); outline-offset: -1px; }
+.component-focus-btn {
+  margin-left: auto;
+  padding: 0 6px;
+  font-size: 10px;
+  color: var(--accent);
+  visibility: hidden;
+}
+.component-row:hover .component-focus-btn { visibility: visible; }
 .component-name { color: var(--fg); }
 .component-kind {
   font-size: 10px;

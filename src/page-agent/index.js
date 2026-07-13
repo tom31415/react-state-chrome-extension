@@ -73,21 +73,24 @@ import { showHighlight, hideHighlight } from './overlay.js';
     return a.kind === 'fiber' ? toCurrentFiber(a.ref) === toCurrentFiber(b.ref) : a.ref === b.ref;
   }
 
-  // If `comp` is the currently selected/displayed component, reuse its
-  // existing id instead of minting a new one — a single, cheap (O(1))
-  // check against just the one id that's already protected from tree-
-  // rebuild eviction, not a scan of every registered component. This is
-  // what lets picking a component on the page and finding the SAME
-  // component in the tree converge on one id: whichever discovers it
-  // second reuses the first's id, so the panel can tell they're the same
-  // component and highlight the matching tree row.
+  // If `comp` is the currently selected/displayed component, OR the
+  // component the tree is currently focused on, reuse its existing id
+  // instead of minting a new one — two cheap (O(1)) checks against ids
+  // already protected from tree-rebuild eviction, not a scan of every
+  // registered component. The selected-id reuse is what lets picking a
+  // component on the page and finding the SAME component in the tree
+  // converge on one id, so the panel can highlight the matching tree row.
+  // The focus-id reuse is what lets a focused subtree survive a rebuild at
+  // all — without it, the focus target would get a fresh id on every
+  // throttled auto-refresh, breaking "stay focused" immediately.
   function registerComponent(comp, node = null) {
-    if (selectedComponentId !== null) {
-      const selectedEntry = components.get(selectedComponentId);
-      if (selectedEntry && isSameComponent(selectedEntry.comp, comp)) {
-        selectedEntry.comp = comp;
-        if (node) selectedEntry.node = node;
-        return selectedComponentId;
+    for (const candidateId of [selectedComponentId, componentTreeFocusId]) {
+      if (candidateId === null) continue;
+      const candidateEntry = components.get(candidateId);
+      if (candidateEntry && isSameComponent(candidateEntry.comp, comp)) {
+        candidateEntry.comp = comp;
+        if (node) candidateEntry.node = node;
+        return candidateId;
       }
     }
     const id = String(nextComponentId++);
@@ -135,26 +138,42 @@ import { showHighlight, hideHighlight } from './overlay.js';
   // on re-render, so ids can't be kept stable across rebuilds) — the
   // previous generation's ids are evicted from `components` so a page with
   // frequent re-renders doesn't accumulate them forever. The currently
-  // *selected* component is exempted: without that, a background auto-
-  // rescan mid-edit would evict the very component the panel is showing.
+  // *selected* component, and the tree's current *focus* target (see the
+  // panel's "Focus" row action), are exempted: without that, a background
+  // auto-rescan mid-edit — or mid-focus — would evict the very component
+  // the panel is showing or scoped to.
   let wantsComponentTree = false;
+  let componentTreeFocusId = null;
   let lastTreeIds = new Set();
 
   function sendComponentTree() {
     for (const id of lastTreeIds) {
-      if (id !== selectedComponentId) components.delete(id);
+      if (id !== selectedComponentId && id !== componentTreeFocusId) components.delete(id);
     }
     lastTreeIds = new Set();
-    const result = buildComponentTree(collectRoots(hookState), (comp) => {
-      const id = registerComponent(comp);
-      lastTreeIds.add(id);
-      return id;
-    });
+
+    let focusRef = null;
+    if (componentTreeFocusId !== null) {
+      const focusEntry = components.get(componentTreeFocusId);
+      if (focusEntry) focusRef = focusEntry.comp;
+      else componentTreeFocusId = null; // focus target is gone — fall back to the full tree
+    }
+
+    const result = buildComponentTree(
+      focusRef ? null : collectRoots(hookState),
+      (comp) => {
+        const id = registerComponent(comp);
+        lastTreeIds.add(id);
+        return id;
+      },
+      focusRef
+    );
     send({
       type: 'component-tree',
       roots: result.roots,
       truncated: result.truncated,
       total: result.total,
+      focusId: componentTreeFocusId,
     });
   }
 
@@ -261,8 +280,14 @@ import { showHighlight, hideHighlight } from './overlay.js';
       mutateComponentProps(entry.comp, msg.path, value);
       sendComponent(msg.id);
     },
-    'get-component-tree'() {
+    'get-component-tree'(msg) {
       wantsComponentTree = true;
+      // The key is omitted by callers that just want a rebuild with
+      // whatever focus is already set (tab-switch, rescan); it's present
+      // (a string id, or null) only when the panel is actually changing focus.
+      if (msg && Object.prototype.hasOwnProperty.call(msg, 'focusId')) {
+        componentTreeFocusId = msg.focusId;
+      }
       sendComponentTree();
     },
     'select-component'(msg) {

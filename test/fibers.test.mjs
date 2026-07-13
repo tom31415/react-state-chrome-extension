@@ -278,6 +278,30 @@ test('buildComponentTree collects composites, flattening through host elements',
   assert.deepEqual(nodeC.children, []);
 });
 
+test('buildComponentTree with a fiber focusRef scopes to just that subtree', () => {
+  const compB = { type: Named, child: null, sibling: null, key: null, stateNode: null };
+  const hostSpan = { type: 'span', child: compB, sibling: null };
+  const compA = { type: Named, child: hostSpan, sibling: null, key: 'a', stateNode: null };
+  const compC = { type: FakeClass, child: null, sibling: null, key: null, stateNode: new FakeClass() };
+  const hostDiv = { type: 'div', child: compA, sibling: compC };
+  const root = { type: undefined, child: hostDiv, sibling: null };
+
+  const { register, registered } = registerCounter();
+  const result = buildComponentTree(
+    [{ kind: 'fiber', ref: root }], // ignored entirely when focusRef is given
+    register,
+    { kind: 'fiber', ref: compA }
+  );
+
+  assert.equal(result.roots.length, 1, 'the focus target itself is the single root, unlike an ordinary root');
+  assert.equal(result.roots[0].name, 'Named');
+  assert.equal(result.roots[0].key, 'a');
+  assert.equal(result.roots[0].children.length, 1);
+  assert.equal(result.roots[0].children[0].name, 'Named');
+  assert.equal(result.total, 2, 'compC (outside the focused subtree) is not walked at all');
+  assert.equal(registered.length, 2);
+});
+
 test('buildComponentTree walks a React 15 legacy tree the same way, skipping a synthetic root wrapper', () => {
   const legacyLeaf = {
     _currentElement: { type: Named, key: null },
@@ -306,6 +330,26 @@ test('buildComponentTree walks a React 15 legacy tree the same way, skipping a s
   assert.equal(result.roots[0].key, 'k');
   assert.equal(result.roots[0].children.length, 1);
   assert.equal(result.roots[0].children[0].kind, 'function');
+});
+
+test('buildComponentTree with a legacy focusRef emits the focus target itself, unlike an ordinary root', () => {
+  const legacyLeaf = { _currentElement: { type: Named, key: null }, _instance: {} };
+  const legacyClass = {
+    _currentElement: { type: FakeClass, key: 'k' },
+    _instance: new FakeClass(),
+    _renderedChildren: { 0: legacyLeaf },
+  };
+
+  const { register, registered } = registerCounter();
+  const result = buildComponentTree([], register, { kind: 'legacy', ref: legacyClass });
+
+  assert.equal(result.roots.length, 1);
+  assert.equal(result.roots[0].name, 'FakeClass');
+  assert.equal(result.roots[0].kind, 'class');
+  assert.equal(result.roots[0].children.length, 1);
+  assert.equal(result.roots[0].children[0].name, 'Named');
+  assert.equal(result.total, 2);
+  assert.equal(registered.length, 2);
 });
 
 test('buildComponentTree caps total nodes and reports truncated', () => {

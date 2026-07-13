@@ -167,6 +167,18 @@ export function createComponentTree(container, opts = {}) {
       row.appendChild(keyBadge);
     }
 
+    if (opts.onFocus) {
+      const focusBtn = document.createElement('button');
+      focusBtn.className = 'component-focus-btn';
+      focusBtn.textContent = 'Focus';
+      focusBtn.title = `Scope the tree to <${node.name}> and its descendants`;
+      focusBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        opts.onFocus(node.id);
+      });
+      row.appendChild(focusBtn);
+    }
+
     row.addEventListener('click', () => opts.onSelect && opts.onSelect(node.id));
     if (opts.onHover) {
       row.addEventListener('mouseenter', () => opts.onHover(node.id));

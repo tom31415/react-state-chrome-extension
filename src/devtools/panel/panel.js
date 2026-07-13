@@ -15,7 +15,7 @@ const state = {
   selectedStoreId: null,
   picking: false,
   tab: 'stores',
-  componentTree: { roots: [], truncated: false, total: 0 },
+  componentTree: { roots: [], truncated: false, total: 0, focusId: null },
   componentTreeRequested: false,
 };
 
@@ -56,12 +56,13 @@ function onPortMessage(msg) {
       state.storeStates.clear();
       state.component = null;
       state.picking = false;
-      state.componentTree = { roots: [], truncated: false, total: 0 };
+      state.componentTree = { roots: [], truncated: false, total: 0, focusId: null };
       state.componentTreeRequested = false;
       $('#component-search').value = '';
       componentTree.setQuery('');
       componentTree.setData(state.componentTree);
       componentTree.setSelected(null);
+      renderComponentFocusBar();
       sendToAgent({ type: 'init' });
       renderAll();
       break;
@@ -104,8 +105,14 @@ function onPortMessage(msg) {
       componentTree.setSelected(msg.id);
       break;
     case 'component-tree':
-      state.componentTree = { roots: msg.roots, truncated: msg.truncated, total: msg.total };
+      state.componentTree = {
+        roots: msg.roots,
+        truncated: msg.truncated,
+        total: msg.total,
+        focusId: msg.focusId,
+      };
       componentTree.setData(state.componentTree);
+      renderComponentFocusBar();
       break;
     case 'error':
       toast(msg.message, 'error');
@@ -137,7 +144,20 @@ const componentTree = createComponentTree($('#component-tree'), {
     if (id) sendToAgent({ type: 'highlight-component', id });
     else sendToAgent({ type: 'clear-highlight' });
   },
+  onFocus(id) {
+    sendToAgent({ type: 'get-component-tree', focusId: id });
+  },
 });
+
+function renderComponentFocusBar() {
+  const bar = $('#component-focus-bar');
+  const focusId = state.componentTree.focusId;
+  bar.hidden = focusId == null;
+  if (focusId != null) {
+    const name = state.componentTree.roots[0]?.name || 'component';
+    $('#component-focus-label').textContent = `Focused on <${name}>`;
+  }
+}
 
 function mergeSlice(storeId, path, replacement) {
   const current = state.storeStates.get(storeId);
@@ -175,6 +195,7 @@ function renderAll() {
   renderStores();
   renderComponent();
   renderPickButton();
+  renderComponentFocusBar();
 }
 
 function renderEnv() {
@@ -375,5 +396,8 @@ $('#tab-component').addEventListener('click', () => {
   renderTabs();
 });
 $('#component-search').addEventListener('input', (e) => componentTree.setQuery(e.target.value));
+$('#component-focus-clear').addEventListener('click', () =>
+  sendToAgent({ type: 'get-component-tree', focusId: null })
+);
 
 renderAll();

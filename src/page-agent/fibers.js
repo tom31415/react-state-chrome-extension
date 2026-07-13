@@ -372,7 +372,7 @@ const MAX_COMPONENT_NODES = 5000;
 // `registerComponent(comp)` is supplied by the caller (the agent's id -> comp
 // map) so a tree node's `id` works with the exact same selection/highlight/
 // edit machinery the picker already populates — no separate fetch path.
-export function buildComponentTree(roots, registerComponent) {
+export function buildComponentTree(roots, registerComponent, focusRef = null) {
   let count = 0;
   let truncated = false;
 
@@ -451,16 +451,34 @@ export function buildComponentTree(roots, registerComponent) {
   }
 
   const forest = [];
-  for (const root of roots) {
-    if (truncated) break;
-    if (root.kind === 'fiber') {
-      collectFiberChildren(root.ref, forest);
+  if (focusRef) {
+    // Scoped to one component (see the "Focus" panel feature): unlike an
+    // ordinary root, the focus target itself IS a real user component, so
+    // it gets emitted as a node — not walked through like a host/Fragment
+    // wrapper or a HostRoot.
+    if (focusRef.kind === 'fiber') {
+      const fiber = toCurrentFiber(focusRef.ref);
+      const node = fiberNode(fiber);
+      forest.push(node);
+      collectFiberChildren(fiber, node.children);
     } else {
-      // The root reference may itself be a synthetic wrapper (e.g. legacy
-      // ReactDOM's internal TopLevelWrapper) rather than a real user
-      // component — walk through it the same way a host/Fragment fiber is
-      // walked through, never emitting a node for the root itself.
-      collectLegacyChildren(root.ref, forest);
+      const el = focusRef.ref._currentElement;
+      const node = legacyNode(focusRef.ref, el);
+      forest.push(node);
+      collectLegacyChildren(focusRef.ref, node.children);
+    }
+  } else {
+    for (const root of roots) {
+      if (truncated) break;
+      if (root.kind === 'fiber') {
+        collectFiberChildren(root.ref, forest);
+      } else {
+        // The root reference may itself be a synthetic wrapper (e.g. legacy
+        // ReactDOM's internal TopLevelWrapper) rather than a real user
+        // component — walk through it the same way a host/Fragment fiber is
+        // walked through, never emitting a node for the root itself.
+        collectLegacyChildren(root.ref, forest);
+      }
     }
   }
 
