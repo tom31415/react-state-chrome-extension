@@ -360,4 +360,111 @@ export function findReactRootsInDom(maxElements = 20000) {
   return roots;
 }
 
+const MAX_COMPONENT_NODES = 5000;
+
+// Builds a composite-only forest from mounted roots (see collectRoots in
+// discovery.js): function/class/memo/forwardRef components, with host
+// elements, Fragments, and Context Providers flattened through so their
+// composite descendants attach directly to the nearest composite ancestor —
+// the same notion of "composite" the picker already uses (isCompositeFiber),
+// just collecting every descendant instead of stopping at the first one.
+//
+// `registerComponent(comp)` is supplied by the caller (the agent's id -> comp
+// map) so a tree node's `id` works with the exact same selection/highlight/
+// edit machinery the picker already populates — no separate fetch path.
+export function buildComponentTree(roots, registerComponent) {
+  let count = 0;
+  let truncated = false;
+
+  function fiberNode(fiber) {
+    count++;
+    const isClass = isClassFiber(fiber);
+    let kind = 'function';
+    if (isClass) kind = 'class';
+    else if (fiber.type && typeof fiber.type === 'object') {
+      kind = fiber.type.render ? 'forwardRef' : 'memo';
+    }
+    return {
+      id: registerComponent({ kind: 'fiber', ref: fiber }),
+      name: getDisplayName(fiber.type),
+      kind,
+      key: fiber.key != null ? String(fiber.key) : null,
+      children: [],
+    };
+  }
+
+  function collectFiberChildren(fiber, into) {
+    let child = fiber.child;
+    while (child && !truncated) {
+      if (isCompositeFiber(child)) {
+        if (count >= MAX_COMPONENT_NODES) {
+          truncated = true;
+          break;
+        }
+        const node = fiberNode(child);
+        into.push(node);
+        collectFiberChildren(child, node.children);
+      } else {
+        collectFiberChildren(child, into);
+      }
+      child = child.sibling;
+    }
+  }
+
+  function legacyNode(inst, el) {
+    count++;
+    const pub = inst._instance;
+    return {
+      id: registerComponent({ kind: 'legacy', ref: inst }),
+      name: getDisplayName(el.type),
+      kind: pub && typeof pub.setState === 'function' ? 'class' : 'function',
+      key: el.key != null ? String(el.key) : null,
+      children: [],
+    };
+  }
+
+  function collectLegacyChildren(inst, into) {
+    if (truncated || !inst || typeof inst !== 'object') return;
+    if (inst._renderedComponent) addLegacy(inst._renderedComponent, into);
+    if (!truncated && inst._renderedChildren && typeof inst._renderedChildren === 'object') {
+      for (const k in inst._renderedChildren) {
+        if (truncated) break;
+        addLegacy(inst._renderedChildren[k], into);
+      }
+    }
+  }
+
+  function addLegacy(inst, into) {
+    if (truncated || !inst || typeof inst !== 'object') return;
+    const el = inst._currentElement;
+    if (el && typeof el.type === 'function') {
+      if (count >= MAX_COMPONENT_NODES) {
+        truncated = true;
+        return;
+      }
+      const node = legacyNode(inst, el);
+      into.push(node);
+      collectLegacyChildren(inst, node.children);
+    } else {
+      collectLegacyChildren(inst, into);
+    }
+  }
+
+  const forest = [];
+  for (const root of roots) {
+    if (truncated) break;
+    if (root.kind === 'fiber') {
+      collectFiberChildren(root.ref, forest);
+    } else {
+      // The root reference may itself be a synthetic wrapper (e.g. legacy
+      // ReactDOM's internal TopLevelWrapper) rather than a real user
+      // component — walk through it the same way a host/Fragment fiber is
+      // walked through, never emitting a node for the root itself.
+      collectLegacyChildren(root.ref, forest);
+    }
+  }
+
+  return { roots: forest, truncated, total: count };
+}
+
 export { describeElement };

@@ -2,6 +2,7 @@
 // Component tab (visually picked component details).
 
 import { createTree } from './tree.js';
+import { createComponentTree } from './componentTree.js';
 import { TAG, isTagged } from '../../shared/serialize.js';
 
 const $ = (sel) => document.querySelector(sel);
@@ -10,10 +11,12 @@ const state = {
   env: null,
   stores: [],
   storeStates: new Map(), // id -> serialized state node
-  selectedStoreId: null,
   component: null,
+  selectedStoreId: null,
   picking: false,
   tab: 'stores',
+  componentTree: { roots: [], truncated: false, total: 0 },
+  componentTreeRequested: false,
 };
 
 // ---------- connection ----------
@@ -52,6 +55,11 @@ function onPortMessage(msg) {
       state.storeStates.clear();
       state.component = null;
       state.picking = false;
+      state.componentTree = { roots: [], truncated: false, total: 0 };
+      state.componentTreeRequested = false;
+      $('#component-search').value = '';
+      componentTree.setQuery('');
+      componentTree.setData(state.componentTree);
       sendToAgent({ type: 'init' });
       renderAll();
       break;
@@ -92,6 +100,10 @@ function onPortMessage(msg) {
       state.tab = 'component';
       renderAll();
       break;
+    case 'component-tree':
+      state.componentTree = { roots: msg.roots, truncated: msg.truncated, total: msg.total };
+      componentTree.setData(state.componentTree);
+      break;
     case 'error':
       toast(msg.message, 'error');
       break;
@@ -114,7 +126,15 @@ const storeTree = createTree($('#store-tree'), {
   onToast: toast,
 });
 
-let componentTrees = null;
+const componentTree = createComponentTree($('#component-tree'), {
+  onSelect(id) {
+    sendToAgent({ type: 'select-component', id });
+  },
+  onHover(id) {
+    if (id) sendToAgent({ type: 'highlight-component', id });
+    else sendToAgent({ type: 'clear-highlight' });
+  },
+});
 
 function mergeSlice(storeId, path, replacement) {
   const current = state.storeStates.get(storeId);
@@ -183,6 +203,10 @@ function renderTabs() {
   $('#tab-component').classList.toggle('active', state.tab === 'component');
   $('#stores-view').hidden = state.tab !== 'stores';
   $('#component-view').hidden = state.tab !== 'component';
+  if (state.tab === 'component' && !state.componentTreeRequested) {
+    state.componentTreeRequested = true;
+    sendToAgent({ type: 'get-component-tree' });
+  }
 }
 
 function renderStores() {
@@ -229,9 +253,8 @@ function renderStoreTree() {
 }
 
 function renderComponent() {
-  const view = $('#component-view');
+  const view = $('#component-detail');
   view.textContent = '';
-  componentTrees = null;
   const c = state.component;
   if (!c) {
     const empty = document.createElement('div');
@@ -348,5 +371,6 @@ $('#tab-component').addEventListener('click', () => {
   state.tab = 'component';
   renderTabs();
 });
+$('#component-search').addEventListener('input', (e) => componentTree.setQuery(e.target.value));
 
 renderAll();

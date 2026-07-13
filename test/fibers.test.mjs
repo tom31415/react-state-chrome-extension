@@ -7,6 +7,7 @@ import {
   toCurrentFiber,
   getHostNode,
   mutateComponentProps,
+  buildComponentTree,
 } from '../src/page-agent/fibers.js';
 
 class FakeClass {
@@ -235,4 +236,94 @@ test('getHostNode highlights the parent element for text-only components', () =>
   const root = { tag: 0, type: Named, stateNode: null, child: textFiber, sibling: null, return: null, alternate: null };
   textFiber.return = root;
   assert.equal(getHostNode({ kind: 'fiber', ref: root }), parent);
+});
+
+function registerCounter() {
+  const registered = [];
+  const register = (comp) => {
+    const id = String(registered.length + 1);
+    registered.push(comp);
+    return id;
+  };
+  return { register, registered };
+}
+
+test('buildComponentTree collects composites, flattening through host elements', () => {
+  //   root (HostRoot, no type)
+  //     div (host, skipped)          -- sibling --> compC (class)
+  //       compA (function, key "a")
+  //         span (host, skipped)
+  //           compB (function)
+  const compB = { type: Named, child: null, sibling: null, key: null, stateNode: null };
+  const hostSpan = { type: 'span', child: compB, sibling: null };
+  const compA = { type: Named, child: hostSpan, sibling: null, key: 'a', stateNode: null };
+  const compC = { type: FakeClass, child: null, sibling: null, key: null, stateNode: new FakeClass() };
+  const hostDiv = { type: 'div', child: compA, sibling: compC };
+  const root = { type: undefined, child: hostDiv, sibling: null };
+
+  const { register, registered } = registerCounter();
+  const result = buildComponentTree([{ kind: 'fiber', ref: root }], register);
+
+  assert.equal(result.truncated, false);
+  assert.equal(result.total, 3);
+  assert.equal(registered.length, 3);
+  assert.equal(result.roots.length, 2, 'div/span are skipped through, not counted as siblings');
+  const [nodeA, nodeC] = result.roots;
+  assert.equal(nodeA.name, 'Named');
+  assert.equal(nodeA.kind, 'function');
+  assert.equal(nodeA.key, 'a');
+  assert.equal(nodeA.children.length, 1);
+  assert.equal(nodeA.children[0].name, 'Named');
+  assert.equal(nodeC.kind, 'class');
+  assert.deepEqual(nodeC.children, []);
+});
+
+test('buildComponentTree walks a React 15 legacy tree the same way, skipping a synthetic root wrapper', () => {
+  const legacyLeaf = {
+    _currentElement: { type: Named, key: null },
+    _instance: {},
+  };
+  const legacyClass = {
+    _currentElement: { type: FakeClass, key: 'k' },
+    _instance: new FakeClass(),
+    _renderedChildren: { 0: legacyLeaf },
+  };
+  // The "root" itself is a synthetic wrapper (composite-shaped but not a
+  // real user component) — must be walked through, never emitted as a node.
+  const topLevelWrapper = {
+    _currentElement: { type: function TopLevelWrapper() {} },
+    _renderedComponent: legacyClass,
+  };
+
+  const { register, registered } = registerCounter();
+  const result = buildComponentTree([{ kind: 'legacy', ref: topLevelWrapper }], register);
+
+  assert.equal(result.total, 2);
+  assert.equal(registered.length, 2);
+  assert.equal(result.roots.length, 1, 'the synthetic wrapper produced no node of its own');
+  assert.equal(result.roots[0].name, 'FakeClass');
+  assert.equal(result.roots[0].kind, 'class');
+  assert.equal(result.roots[0].key, 'k');
+  assert.equal(result.roots[0].children.length, 1);
+  assert.equal(result.roots[0].children[0].kind, 'function');
+});
+
+test('buildComponentTree caps total nodes and reports truncated', () => {
+  // A long sibling chain of 5010 composite fibers under one root.
+  let head = null;
+  let prev = null;
+  for (let i = 0; i < 5010; i++) {
+    const fiber = { type: Named, child: null, sibling: null, key: null, stateNode: null };
+    if (prev) prev.sibling = fiber;
+    else head = fiber;
+    prev = fiber;
+  }
+  const root = { type: undefined, child: head, sibling: null };
+
+  const { register } = registerCounter();
+  const result = buildComponentTree([{ kind: 'fiber', ref: root }], register);
+
+  assert.equal(result.truncated, true);
+  assert.equal(result.total, 5000);
+  assert.equal(result.roots.length, 5000);
 });

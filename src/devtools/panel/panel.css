@@ -133,19 +133,59 @@ main > section { flex: 1; overflow: auto; }
   color: var(--accent);
 }
 
-#component-view { padding: 10px 14px; }
+#component-view { display: flex; }
+#component-tree-pane {
+  width: 260px;
+  min-width: 180px;
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+}
+#component-search {
+  font: inherit;
+  color: var(--fg);
+  background: var(--bg);
+  border: none;
+  border-bottom: 1px solid var(--border);
+  padding: 6px 8px;
+  outline: none;
+}
+#component-search:focus { border-bottom-color: var(--accent); }
+#component-tree {
+  flex: 1;
+  overflow: auto;
+  padding: 4px;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  white-space: nowrap;
+}
+.component-row { display: flex; align-items: center; gap: 6px; min-height: 20px; border-radius: 3px; cursor: pointer; }
+.component-row:hover { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.component-name { color: var(--fg); }
+.component-kind {
+  font-size: 10px;
+  padding: 0 5px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  color: var(--dim);
+  white-space: nowrap;
+}
+.component-kind.kind-class { color: var(--accent); border-color: var(--accent); }
+.component-key { font-size: 10px; color: var(--dim); font-style: italic; }
+.tree-note { color: var(--warn); padding: 6px 8px; white-space: normal; font-size: 11px; }
+
+#component-detail { flex: 1; overflow: auto; padding: 10px 14px; }
 .component-header { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .component-header h2 { margin: 0; font-size: 15px; font-family: ui-monospace, Menlo, monospace; }
 .component-meta { color: var(--dim); margin: 4px 0 10px; }
-#component-view section { margin-bottom: 10px; }
-#component-view h3 {
+#component-detail section { margin-bottom: 10px; }
+#component-detail h3 {
   margin: 8px 0 4px;
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--dim);
 }
-#component-view .tree-pane {
+#component-detail .tree-pane {
   border: 1px solid var(--border);
   border-radius: 6px;
   max-height: 300px;

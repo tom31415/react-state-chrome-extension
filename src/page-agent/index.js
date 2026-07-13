@@ -5,7 +5,7 @@
 import { installReactHook, getRendererVersions } from './reactHook.js';
 import { installReduxShim } from './reduxShim.js';
 import { createStoreRegistry } from './reduxRegistry.js';
-import { discoverStores } from './discovery.js';
+import { discoverStores, collectRoots } from './discovery.js';
 import { createPicker } from './picker.js';
 import {
   describeComponent,
@@ -13,6 +13,7 @@ import {
   getHostNode,
   describeElement,
   mutateComponentProps,
+  buildComponentTree,
 } from './fibers.js';
 import { serialize } from '../shared/serialize.js';
 import { getIn, setIn } from '../shared/paths.js';
@@ -47,7 +48,9 @@ import { showHighlight, hideHighlight } from './overlay.js';
     rescanScheduled = true;
     setTimeout(() => {
       rescanScheduled = false;
-      if (active) scan();
+      if (!active) return;
+      scan();
+      if (wantsComponentTree) sendComponentTree();
     }, 300);
   }
 
@@ -62,14 +65,19 @@ import { showHighlight, hideHighlight } from './overlay.js';
 
   const components = new Map(); // id -> { comp, node }
   let nextComponentId = 1;
+  let selectedComponentId = null; // protected from tree-rebuild eviction, below
+
+  function registerComponent(comp, node = null) {
+    const id = String(nextComponentId++);
+    components.set(id, { comp, node });
+    return id;
+  }
 
   const picker = createPicker({
     onPick(comp, node) {
       send({ type: 'pick-state', picking: false });
       try {
-        const id = String(nextComponentId++);
-        components.set(id, { comp, node });
-        sendComponent(id);
+        sendComponent(registerComponent(comp, node));
       } catch (err) {
         send({
           type: 'error',
@@ -87,11 +95,39 @@ import { showHighlight, hideHighlight } from './overlay.js';
     const entry = components.get(id);
     if (!entry) throw new Error('Component reference is gone (page may have re-rendered).');
     const info = describeComponent(entry.comp);
+    selectedComponentId = id;
     send({
       type: 'component-selected',
       id,
       dom: entry.node ? describeElement(entry.node) : null,
       ...info,
+    });
+  }
+
+  // Every tree rebuild assigns fresh ids (fibers are ephemeral and re-created
+  // on re-render, so ids can't be kept stable across rebuilds) — the
+  // previous generation's ids are evicted from `components` so a page with
+  // frequent re-renders doesn't accumulate them forever. The currently
+  // *selected* component is exempted: without that, a background auto-
+  // rescan mid-edit would evict the very component the panel is showing.
+  let wantsComponentTree = false;
+  let lastTreeIds = new Set();
+
+  function sendComponentTree() {
+    for (const id of lastTreeIds) {
+      if (id !== selectedComponentId) components.delete(id);
+    }
+    lastTreeIds = new Set();
+    const result = buildComponentTree(collectRoots(hookState), (comp) => {
+      const id = registerComponent(comp);
+      lastTreeIds.add(id);
+      return id;
+    });
+    send({
+      type: 'component-tree',
+      roots: result.roots,
+      truncated: result.truncated,
+      total: result.total,
     });
   }
 
@@ -120,6 +156,7 @@ import { showHighlight, hideHighlight } from './overlay.js';
     sendEnvironment();
     send({ type: 'stores', stores: registry.list() });
     registry.pushAll();
+    if (wantsComponentTree) sendComponentTree();
   }
 
   const handlers = {
@@ -195,6 +232,13 @@ import { showHighlight, hideHighlight } from './overlay.js';
       if (!entry) throw new Error('Component reference is gone (page may have re-rendered).');
       const value = JSON.parse(msg.json);
       mutateComponentProps(entry.comp, msg.path, value);
+      sendComponent(msg.id);
+    },
+    'get-component-tree'() {
+      wantsComponentTree = true;
+      sendComponentTree();
+    },
+    'select-component'(msg) {
       sendComponent(msg.id);
     },
   };
