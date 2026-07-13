@@ -21,14 +21,24 @@ export function createTree(container, opts = {}) {
   }
 
   function render() {
-    container.textContent = '';
-    const rootLabel = opts.rootLabel || 'state';
-    const visible = computeTreeSearchVisibility(rootLabel, root, query);
-    if (visible && !visible.has(pathKey([]))) {
-      container.appendChild(el('div', 'empty', `No values match "${query}".`));
-      return;
+    // A full teardown-and-rebuild collapses the container to empty (however
+    // briefly) before its content grows back, which some rebuild paths use
+    // as the trigger to clamp scrollTop to 0 — preserve it explicitly
+    // (try/finally: this has more than one return point) rather than rely
+    // on the browser to leave it alone across that gap.
+    const scrollTop = container.scrollTop;
+    try {
+      container.textContent = '';
+      const rootLabel = opts.rootLabel || 'state';
+      const visible = computeTreeSearchVisibility(rootLabel, root, query);
+      if (visible && !visible.has(pathKey([]))) {
+        container.appendChild(el('div', 'empty', `No values match "${query}".`));
+        return;
+      }
+      container.appendChild(renderNode(rootLabel, root, [], !!opts.onEdit, 0, true, visible));
+    } finally {
+      container.scrollTop = scrollTop;
     }
-    container.appendChild(renderNode(rootLabel, root, [], !!opts.onEdit, 0, true, visible));
   }
 
   function renderNode(label, node, path, canEdit, depth, pathIsReal, visible) {

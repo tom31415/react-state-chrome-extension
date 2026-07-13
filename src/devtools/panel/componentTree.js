@@ -96,30 +96,40 @@ export function createComponentTree(container, opts = {}) {
   }
 
   function render() {
-    container.textContent = '';
-    if (data.roots.length === 0) {
-      container.appendChild(emptyState('No components found. If your app mounts after this scan, hit Rescan.'));
-      return;
-    }
+    // A full teardown-and-rebuild collapses the container to empty (however
+    // briefly) before its content grows back, which some rebuild paths use
+    // as the trigger to clamp scrollTop to 0 — preserve it explicitly
+    // (try/finally: several branches below return early) rather than rely
+    // on the browser to leave it alone across that gap.
+    const scrollTop = container.scrollTop;
+    try {
+      container.textContent = '';
+      if (data.roots.length === 0) {
+        container.appendChild(emptyState('No components found. If your app mounts after this scan, hit Rescan.'));
+        return;
+      }
 
-    const visible = computeSearchVisibility(data.roots, query);
-    const frag = document.createDocumentFragment();
-    let anyVisible = false;
-    data.roots.forEach((node, i) => {
-      const path = [i];
-      if (visible && !visible.has(pathKey(path))) return;
-      anyVisible = true;
-      frag.appendChild(renderNode(node, path, visible, 0));
-    });
-    container.appendChild(frag);
+      const visible = computeSearchVisibility(data.roots, query);
+      const frag = document.createDocumentFragment();
+      let anyVisible = false;
+      data.roots.forEach((node, i) => {
+        const path = [i];
+        if (visible && !visible.has(pathKey(path))) return;
+        anyVisible = true;
+        frag.appendChild(renderNode(node, path, visible, 0));
+      });
+      container.appendChild(frag);
 
-    if (!anyVisible) {
-      container.appendChild(emptyState(`No components match "${query}".`));
-    } else if (data.truncated) {
-      const note = document.createElement('div');
-      note.className = 'tree-note';
-      note.textContent = `Showing the first ${data.total} components found — more exist. Narrow your search or inspect a subtree directly.`;
-      container.appendChild(note);
+      if (!anyVisible) {
+        container.appendChild(emptyState(`No components match "${query}".`));
+      } else if (data.truncated) {
+        const note = document.createElement('div');
+        note.className = 'tree-note';
+        note.textContent = `Showing the first ${data.total} components found — more exist. Narrow your search or inspect a subtree directly.`;
+        container.appendChild(note);
+      }
+    } finally {
+      container.scrollTop = scrollTop;
     }
   }
 

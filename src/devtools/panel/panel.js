@@ -22,6 +22,14 @@ const state = {
   storeHistories: new Map(), // id -> { entries: [{seq, type}], total }
 };
 
+// A page/service-worker reconnect (see the 'agent-ready' case below) clears
+// storeStates and briefly shows "Waiting for state…", which collapses
+// #store-tree to one line — any scrollTop we try to set at that instant is
+// clamped straight back to 0, since there's nothing to scroll into yet. The
+// captured value has to survive across that gap and get applied only once
+// the real state is back and the tree has its real height again.
+let pendingScrollRestore = null; // { storeId, scrollTop } | null
+
 // ---------- connection ----------
 // The MV3 service worker is terminated when idle, which kills the port; the
 // panel must reconnect and re-register or it is permanently deaf.
@@ -55,6 +63,11 @@ function onPortMessage(msg) {
   switch (msg.type) {
     case 'agent-ready':
     case 'bridge-ready':
+      // Capture BEFORE anything is cleared/re-rendered — #store-tree still
+      // shows the real, fully-scrolled tree at this exact point.
+      if (state.selectedStoreId != null) {
+        pendingScrollRestore = { storeId: state.selectedStoreId, scrollTop: $('#store-tree').scrollTop };
+      }
       state.stores = [];
       state.storeStates.clear();
       state.component = null;
@@ -345,10 +358,21 @@ function renderStoreTree() {
   }
   const data = state.storeStates.get(id);
   if (data === undefined) {
+    // This fires every time the extension's own MV3 port reconnects (the
+    // service worker idle-suspends periodically, unrelated to the page or
+    // the store), not just on a genuine store change. The container has no
+    // overflow while this one-line text is showing, so there is no scroll
+    // position to preserve HERE — pendingScrollRestore (captured before this
+    // branch ever ran) is what survives across this gap and gets applied
+    // below once the real state is back.
     pane.textContent = 'Waiting for state…';
     return;
   }
   storeTree.setData(data);
+  if (pendingScrollRestore && pendingScrollRestore.storeId === id) {
+    pane.scrollTop = pendingScrollRestore.scrollTop;
+    pendingScrollRestore = null;
+  }
 }
 
 function renderComponent() {
