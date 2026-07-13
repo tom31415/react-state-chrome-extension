@@ -75,6 +75,10 @@ button.active { background: var(--accent); border-color: var(--accent); color: #
 
 main { flex: 1; overflow: hidden; display: flex; }
 main > section { flex: 1; overflow: auto; }
+/* An ID selector's specificity beats the UA stylesheet's [hidden]{display:none},
+   so any element toggled via the hidden attribute needs this to actually hide —
+   one general rule instead of patching every current/future display override. */
+[hidden] { display: none !important; }
 
 #stores-view { display: flex; }
 #store-list {
