@@ -61,8 +61,22 @@ function sendToAgent(msg) {
 
 function onPortMessage(msg) {
   switch (msg.type) {
-    case 'agent-ready':
     case 'bridge-ready':
+      // Sent by content.js whenever ITS OWN port to the service worker
+      // reconnects — the MV3 service worker idle-suspends routinely
+      // (roughly every ~30s of inactivity), entirely independent of the
+      // page or its stores. The page's agent is untouched by this (same
+      // registry, same everything) — just ask it to re-sync. Clearing the
+      // UI first (as this used to share with 'agent-ready' below) forced a
+      // guaranteed empty-then-repopulate flash on every idle-suspend cycle
+      // even though nothing had actually changed.
+      sendToAgent({ type: 'init' });
+      break;
+    case 'agent-ready':
+      // Sent by the page agent itself only on a genuinely fresh instance
+      // (a real navigation/reload, or a bfcache restore) — the previous
+      // agent, and everything it knew, really is gone, so a full reset here
+      // is correct.
       // Capture BEFORE anything is cleared/re-rendered — #store-tree still
       // shows the real, fully-scrolled tree at this exact point.
       if (state.selectedStoreId != null) {
