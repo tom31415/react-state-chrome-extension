@@ -30,6 +30,7 @@ function connect() {
   port.postMessage({ type: 'panel-init', tabId: chrome.devtools.inspectedWindow.tabId });
   port.onMessage.addListener(onPortMessage);
   port.onDisconnect.addListener(() => {
+    void chrome.runtime.lastError; // read to silence "Unchecked runtime.lastError"
     port = null;
     setTimeout(() => {
       connect();

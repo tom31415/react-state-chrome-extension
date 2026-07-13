@@ -14,6 +14,10 @@ chrome.runtime.onConnect.addListener((port) => {
       if (panels) for (const p of panels) p.postMessage(msg);
     });
     port.onDisconnect.addListener(() => {
+      // Read to silence "Unchecked runtime.lastError" — Chrome sets this
+      // whenever a port is torn down abnormally (e.g. the page's tab is
+      // moved into the back/forward cache), and warns if nobody reads it.
+      void chrome.runtime.lastError;
       if (contentPorts.get(tabId) === port) contentPorts.delete(tabId);
     });
   } else if (port.name === 'rri-panel') {
@@ -31,6 +35,7 @@ chrome.runtime.onConnect.addListener((port) => {
       else port.postMessage({ type: 'error', message: 'Page is not reachable — reload the tab.' });
     });
     port.onDisconnect.addListener(() => {
+      void chrome.runtime.lastError; // see comment on the 'rri-content' listener above
       if (tabId == null) return;
       const panels = panelPorts.get(tabId);
       if (panels) {

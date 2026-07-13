@@ -24,10 +24,8 @@ function connectPort(announce) {
     window.postMessage({ __rri: 'to-agent', msg }, '*');
   });
   port.onDisconnect.addListener(() => {
+    void chrome.runtime.lastError; // read to silence "Unchecked runtime.lastError"
     port = null;
-    if (chrome.runtime.lastError) {
-      // read to silence "Unchecked runtime.lastError"
-    }
     // Assume no panel until one re-inits — stops the agent serializing state
     // on every dispatch for nobody.
     window.postMessage({ __rri: 'to-agent', msg: { type: 'panel-disconnected' } }, '*');
