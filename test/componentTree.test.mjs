@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { computeSearchVisibility, pathKey } from '../src/devtools/panel/componentTree.js';
+import { computeSearchVisibility, pathKey, findPath } from '../src/devtools/panel/componentTree.js';
 
 function node(name, children = []) {
   return { id: name, name, kind: 'function', key: null, children };
@@ -43,4 +43,21 @@ test('no matches anywhere yields an empty (but non-null) visible set', () => {
   const visible = computeSearchVisibility(tree, 'zzz-nomatch');
   assert.notEqual(visible, null);
   assert.equal(visible.size, 0);
+});
+
+test('findPath locates a nested node by id', () => {
+  const tree = [node('App', [node('Layout', [node('SearchBar')])])];
+  assert.deepEqual(findPath(tree, 'SearchBar'), [0, 0, 0]);
+  assert.deepEqual(findPath(tree, 'Layout'), [0, 0]);
+  assert.deepEqual(findPath(tree, 'App'), [0]);
+});
+
+test('findPath returns null for an id not in the tree', () => {
+  const tree = [node('App', [node('Header')])];
+  assert.equal(findPath(tree, 'Nope'), null);
+});
+
+test('findPath finds a node under a later sibling root', () => {
+  const tree = [node('First', [node('A')]), node('Second', [node('B')])];
+  assert.deepEqual(findPath(tree, 'B'), [1, 0]);
 });

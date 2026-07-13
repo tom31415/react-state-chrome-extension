@@ -7,6 +7,23 @@ export function pathKey(path) {
   return JSON.stringify(path);
 }
 
+// Structural path of the node with the given id, or null if not present.
+export function findPath(roots, id) {
+  function visit(node, path) {
+    if (node.id === id) return path;
+    for (let i = 0; i < node.children.length; i++) {
+      const found = visit(node.children[i], [...path, i]);
+      if (found) return found;
+    }
+    return null;
+  }
+  for (let i = 0; i < roots.length; i++) {
+    const found = visit(roots[i], [i]);
+    if (found) return found;
+  }
+  return null;
+}
+
 // Returns the set of path-keys that must stay visible for a case-insensitive
 // substring search over component names — a node is visible if its own name
 // matches OR any descendant's does (which keeps every ancestor of a match
@@ -38,15 +55,44 @@ export function createComponentTree(container, opts = {}) {
   const collapsed = new Set();
   let data = { roots: [], truncated: false, total: 0 };
   let query = '';
+  let selectedId = null;
+  // The id we've already expanded-ancestors-and-scrolled-to, so a
+  // background tree refresh while the same component stays selected
+  // doesn't keep jumping the scroll position back to it.
+  let scrolledToId = null;
 
   function setData(next) {
     data = next;
     render();
+    tryRevealSelection();
   }
 
   function setQuery(next) {
     query = next;
     render();
+  }
+
+  // The agent's id-reuse (see registerComponent in the page agent) makes a
+  // picked component's id equal an existing tree node's id when they're the
+  // same component — but the matching tree data may not have arrived yet
+  // (setSelected can race setData in either order), so this is retried from
+  // both entry points until a path is actually found.
+  function setSelected(id) {
+    if (id !== selectedId) scrolledToId = null;
+    selectedId = id;
+    render();
+    tryRevealSelection();
+  }
+
+  function tryRevealSelection() {
+    if (selectedId == null || selectedId === scrolledToId) return;
+    const path = findPath(data.roots, selectedId);
+    if (!path) return; // not (yet) in the tree — next setData/setSelected retries
+    for (let i = 1; i < path.length; i++) collapsed.delete(pathKey(path.slice(0, i)));
+    render();
+    const row = container.querySelector('.component-row.selected');
+    if (row) row.scrollIntoView({ block: 'nearest' });
+    scrolledToId = selectedId;
   }
 
   function render() {
@@ -80,7 +126,7 @@ export function createComponentTree(container, opts = {}) {
   function renderNode(node, path, visible, depth) {
     const frag = document.createDocumentFragment();
     const row = document.createElement('div');
-    row.className = 'component-row';
+    row.className = 'component-row' + (node.id === selectedId ? ' selected' : '');
     row.style.paddingLeft = `${depth * 14 + 4}px`;
 
     const hasChildren = node.children.length > 0;
@@ -139,7 +185,7 @@ export function createComponentTree(container, opts = {}) {
     return frag;
   }
 
-  return { setData, setQuery };
+  return { setData, setQuery, setSelected };
 }
 
 function emptyState(text) {

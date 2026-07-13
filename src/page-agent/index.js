@@ -14,6 +14,7 @@ import {
   describeElement,
   mutateComponentProps,
   buildComponentTree,
+  toCurrentFiber,
 } from './fibers.js';
 import { serialize } from '../shared/serialize.js';
 import { getIn, setIn } from '../shared/paths.js';
@@ -67,7 +68,28 @@ import { showHighlight, hideHighlight } from './overlay.js';
   let nextComponentId = 1;
   let selectedComponentId = null; // protected from tree-rebuild eviction, below
 
+  function isSameComponent(a, b) {
+    if (a.kind !== b.kind) return false;
+    return a.kind === 'fiber' ? toCurrentFiber(a.ref) === toCurrentFiber(b.ref) : a.ref === b.ref;
+  }
+
+  // If `comp` is the currently selected/displayed component, reuse its
+  // existing id instead of minting a new one — a single, cheap (O(1))
+  // check against just the one id that's already protected from tree-
+  // rebuild eviction, not a scan of every registered component. This is
+  // what lets picking a component on the page and finding the SAME
+  // component in the tree converge on one id: whichever discovers it
+  // second reuses the first's id, so the panel can tell they're the same
+  // component and highlight the matching tree row.
   function registerComponent(comp, node = null) {
+    if (selectedComponentId !== null) {
+      const selectedEntry = components.get(selectedComponentId);
+      if (selectedEntry && isSameComponent(selectedEntry.comp, comp)) {
+        selectedEntry.comp = comp;
+        if (node) selectedEntry.node = node;
+        return selectedComponentId;
+      }
+    }
     const id = String(nextComponentId++);
     components.set(id, { comp, node });
     return id;
@@ -78,6 +100,11 @@ import { showHighlight, hideHighlight } from './overlay.js';
       send({ type: 'pick-state', picking: false });
       try {
         sendComponent(registerComponent(comp, node));
+        // Picking alone triggers no React commit, so nothing would otherwise
+        // rebuild the tree — do it now so the tree (if requested) picks up
+        // registerComponent's id-reuse and can highlight the matching row
+        // right away instead of waiting on some unrelated future re-render.
+        if (wantsComponentTree) sendComponentTree();
       } catch (err) {
         send({
           type: 'error',

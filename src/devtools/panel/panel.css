@@ -164,6 +164,7 @@ main > section { flex: 1; overflow: auto; }
 }
 .component-row { display: flex; align-items: center; gap: 6px; min-height: 20px; border-radius: 3px; cursor: pointer; }
 .component-row:hover { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.component-row.selected { background: color-mix(in srgb, var(--accent) 18%, transparent); outline: 1px solid var(--accent); outline-offset: -1px; }
 .component-name { color: var(--fg); }
 .component-kind {
   font-size: 10px;

@@ -61,6 +61,7 @@ function onPortMessage(msg) {
       $('#component-search').value = '';
       componentTree.setQuery('');
       componentTree.setData(state.componentTree);
+      componentTree.setSelected(null);
       sendToAgent({ type: 'init' });
       renderAll();
       break;
@@ -100,6 +101,7 @@ function onPortMessage(msg) {
       state.component = msg;
       state.tab = 'component';
       renderAll();
+      componentTree.setSelected(msg.id);
       break;
     case 'component-tree':
       state.componentTree = { roots: msg.roots, truncated: msg.truncated, total: msg.total };
