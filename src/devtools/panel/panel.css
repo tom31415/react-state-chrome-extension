@@ -101,6 +101,56 @@ main > section { flex: 1; overflow: auto; }
 }
 .store-item.selected { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
 
+#store-tree-pane { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+#store-tree-toolbar {
+  display: flex;
+  align-items: stretch;
+  border-bottom: 1px solid var(--border);
+}
+#store-search {
+  font: inherit;
+  color: var(--fg);
+  background: var(--bg);
+  border: none;
+  padding: 6px 8px;
+  outline: none;
+  flex: 1;
+  min-width: 0;
+}
+#store-search:focus { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+#store-history-toggle { border: none; border-radius: 0; border-left: 1px solid var(--border); font-size: 11px; }
+
+#store-history-pane {
+  width: 220px;
+  min-width: 160px;
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+}
+#store-history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--dim);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+#store-history-header button { padding: 1px 8px; font-size: 11px; text-transform: none; letter-spacing: normal; }
+#store-history-list { flex: 1; overflow: auto; font-family: ui-monospace, Menlo, Consolas, monospace; }
+.history-row {
+  display: flex;
+  gap: 6px;
+  padding: 3px 8px;
+  cursor: pointer;
+  border-bottom: 1px solid transparent;
+}
+.history-row:hover { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.history-seq { color: var(--dim); min-width: 2em; text-align: right; }
+.history-type { color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 .tree-pane {
   flex: 1;
   overflow: auto;
@@ -136,6 +186,15 @@ main > section { flex: 1; overflow: auto; }
   font-size: 10px;
   color: var(--accent);
 }
+.tree-copy {
+  margin-left: 4px;
+  padding: 0 5px;
+  font-size: 10px;
+  color: var(--dim);
+  visibility: hidden;
+}
+.tree-row:hover .tree-copy { visibility: visible; }
+.tree-copy:hover { color: var(--accent); border-color: var(--accent); }
 
 #component-view { display: flex; }
 #component-tree-pane {

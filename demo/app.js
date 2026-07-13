@@ -25,6 +25,8 @@
   };
   const todoStore = createStore(todosReducer);
 
+  const ThemeContext = React.createContext('light');
+
   // --- Components ---
   class ClassCounter extends React.Component {
     constructor(props) {
@@ -54,6 +56,11 @@
     );
   }
 
+  function ThemedBadge() {
+    const theme = React.useContext(ThemeContext);
+    return e('span', { id: 'themed-badge' }, `theme: ${theme}`);
+  }
+
   function TodoList() {
     const todos = ReactRedux.useSelector((s) => s.items);
     const dispatch = ReactRedux.useDispatch();
@@ -68,7 +75,8 @@
     return e(React.Fragment, null,
       e(ClassCounter, { label: 'class component, local state' }),
       e(ReactRedux.Provider, { store: counterStore }, e(HookCounter, { label: 'hooks + react-redux' })),
-      e(ReactRedux.Provider, { store: todoStore }, e(TodoList))
+      e(ReactRedux.Provider, { store: todoStore }, e(TodoList)),
+      e(ThemeContext.Provider, { value: 'dark' }, e(ThemedBadge))
     );
   }
 

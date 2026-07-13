@@ -137,6 +137,100 @@ test('edit on an unknown store id throws', () => {
   assert.throws(() => registry.edit('42', [], {}), /Unknown store/);
 });
 
+test('actions are recorded into a per-store history with incrementing seq', () => {
+  const registry = createStoreRegistry(() => {}, () => false);
+  const store = makeStore({ n: 0 });
+  const id = registry.register(store, { tier: 3 });
+  store.dispatch({ type: 'increment' });
+  store.dispatch({ type: 'increment' });
+  const { entries, total } = registry.getHistory(id);
+  assert.equal(total, 2);
+  assert.deepEqual(
+    entries.map((e) => e.type),
+    ['increment', 'increment']
+  );
+  assert.deepEqual(
+    entries.map((e) => e.seq),
+    [1, 2]
+  );
+});
+
+test('internal @@RRI actions (override, notify) are not recorded as history', () => {
+  const registry = createStoreRegistry(() => {}, () => true);
+  const store = makeStore({ n: 1 });
+  const id = registry.register(store, { tier: 3 });
+  registry.edit(id, ['n'], 2); // ephemeral: dispatches @@RRI/NOTIFY via the REAL dispatch, bypassing our patch
+  store.dispatch({ type: 'increment' }); // a real action still gets recorded
+  const { total } = registry.getHistory(id);
+  assert.equal(total, 1);
+});
+
+test('history is capped at 50 entries but total keeps counting past the cap', () => {
+  const registry = createStoreRegistry(() => {}, () => false);
+  const store = makeStore({ n: 0 });
+  const id = registry.register(store, { tier: 3 });
+  for (let i = 0; i < 60; i++) store.dispatch({ type: `action-${i}` });
+  const { entries, total } = registry.getHistory(id);
+  assert.equal(total, 60);
+  assert.equal(entries.length, 50);
+  assert.equal(entries[0].type, 'action-10', 'the oldest 10 scrolled out of the ring buffer');
+  assert.equal(entries[49].type, 'action-59');
+});
+
+test('getHistoryStateAt returns the real state at a given seq, or undefined once evicted', () => {
+  const registry = createStoreRegistry(() => {}, () => false);
+  const store = makeStore({ n: 0 });
+  const id = registry.register(store, { tier: 3 });
+  store.dispatch({ type: 'set', state: { n: 1 } });
+  store.dispatch({ type: 'set', state: { n: 2 } });
+  assert.deepEqual(registry.getHistoryStateAt(id, 1), { n: 1 });
+  assert.deepEqual(registry.getHistoryStateAt(id, 2), { n: 2 });
+  assert.equal(registry.getHistoryStateAt(id, 999), undefined);
+});
+
+test('jumping to a past action (replaying its recorded state via edit) restores it', () => {
+  const registry = createStoreRegistry(() => {}, () => false);
+  const store = makeStore({ n: 0 });
+  const id = registry.register(store, { tier: 3 });
+  store.dispatch({ type: 'set', state: { n: 1 } });
+  store.dispatch({ type: 'set', state: { n: 2 } });
+  store.dispatch({ type: 'set', state: { n: 3 } });
+  const pastState = registry.getHistoryStateAt(id, 1); // { n: 1 }
+  const mode = registry.edit(id, [], pastState);
+  assert.equal(mode, 'ephemeral');
+  assert.deepEqual(store.getState(), { n: 1 });
+});
+
+test('clearHistory resets both entries and the running total', () => {
+  const registry = createStoreRegistry(() => {}, () => false);
+  const store = makeStore({ n: 0 });
+  const id = registry.register(store, { tier: 3 });
+  store.dispatch({ type: 'increment' });
+  registry.clearHistory(id);
+  const { entries, total } = registry.getHistory(id);
+  assert.deepEqual(entries, []);
+  assert.equal(total, 0);
+  store.dispatch({ type: 'increment' });
+  assert.equal(registry.getHistory(id).total, 1, 'recording continues normally after a clear');
+});
+
+test('store-action is only pushed once getHistory has been called for that store (historyWanted)', () => {
+  const sent = [];
+  const registry = createStoreRegistry((m) => sent.push(m), () => true);
+  const store = makeStore({ n: 0 });
+  const id = registry.register(store, { tier: 3 });
+  store.dispatch({ type: 'increment' });
+  assert.equal(sent.filter((m) => m.type === 'store-action').length, 0, 'nobody asked for history yet');
+
+  registry.getHistory(id);
+  store.dispatch({ type: 'increment' });
+  const pushes = sent.filter((m) => m.type === 'store-action');
+  assert.equal(pushes.length, 1);
+  assert.equal(pushes[0].actionType, 'increment');
+  assert.equal(pushes[0].seq, 2);
+  assert.equal(pushes[0].total, 2);
+});
+
 test('state pushes only happen while a panel is connected', () => {
   const sent = [];
   let active = false;

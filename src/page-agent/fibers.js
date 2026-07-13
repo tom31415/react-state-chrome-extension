@@ -148,6 +148,31 @@ function describeHook(h, index) {
   return { index, kind: 'other', value: serialize(ms, 4) };
 }
 
+// Context consumed via useContext() or a class's static contextType — both
+// go through the same fiber dependency linked list. The list head/field
+// names changed between React versions (contextDependencies.first pre-18,
+// dependencies.firstContext from 18), and per-entry the value moved from
+// reading the context object's own _currentValue to a per-fiber
+// memoizedValue — read both shapes rather than assume one. Legacy class
+// context (the old contextTypes API, which stores a merged object directly
+// on the instance rather than this linked list) is out of scope, same as
+// hooks are for React 15.
+function extractContext(fiber) {
+  const contexts = [];
+  const deps = fiber.dependencies || fiber.contextDependencies;
+  let dep = deps && (deps.firstContext || deps.first);
+  let i = 0;
+  while (dep && typeof dep === 'object' && i < 20) {
+    const context = dep.context;
+    const value = 'memoizedValue' in dep ? dep.memoizedValue : context && context._currentValue;
+    const name = (context && context.displayName) || `Context ${contexts.length + 1}`;
+    contexts.push({ name, value: serialize(value, 6) });
+    dep = dep.next;
+    i++;
+  }
+  return contexts;
+}
+
 // Fibers are double-buffered: after a re-render the fiber we captured may be
 // the stale alternate, and no pointer on the fiber or instance reliably says
 // which generation is mounted. Climb to the FiberRoot (shared by both
@@ -189,6 +214,7 @@ export function describeComponent(comp) {
       props: serialize(f.memoizedProps, 6),
       state: isClass ? serialize(f.memoizedState, 6) : null,
       hooks: isClass || typeof f.type === 'string' ? [] : extractHooks(f),
+      context: typeof f.type === 'string' ? [] : extractContext(f),
       key: f.key != null ? String(f.key) : null,
       canEditState: canEdit,
       canEditProps: canEdit,
@@ -210,6 +236,7 @@ export function describeComponent(comp) {
     props: serialize(el && el.props, 6),
     state: isClass ? serialize(pub.state, 6) : null,
     hooks: [],
+    context: [],
     key: el && el.key != null ? String(el.key) : null,
     canEditState: canEdit,
     canEditProps: canEdit,
@@ -483,6 +510,31 @@ export function buildComponentTree(roots, registerComponent, focusRef = null) {
   }
 
   return { roots: forest, truncated, total: count };
+}
+
+// React marks every fiber that actually re-executed this commit (as opposed
+// to one that bailed out unchanged) with a PerformedWork bit — value 1,
+// unchanged since fibers were introduced in React 16, just moved from a
+// field called `effectTag` (16-17) to `flags` (18+). This is the same
+// signal React's own DevTools uses for "highlight updates"; legacy React 15
+// has no fibers/flags at all, so this feature is fiber-only.
+const PERFORMED_WORK = 1;
+
+// Host DOM nodes for every composite component that rendered THIS commit,
+// for a "flash on update" overlay. Walks the freshly committed tree (NOT
+// via toCurrentFiber — root.current already IS the current generation right
+// after onCommitFiberRoot fires).
+export function findUpdatedHostNodes(root) {
+  const nodes = [];
+  if (!root || !root.current) return nodes;
+  walkFiberTree(root.current, (fiber) => {
+    if (!isCompositeFiber(fiber)) return;
+    const flags = typeof fiber.flags === 'number' ? fiber.flags : fiber.effectTag;
+    if (typeof flags !== 'number' || (flags & PERFORMED_WORK) === 0) return;
+    const node = getHostNode({ kind: 'fiber', ref: fiber });
+    if (node) nodes.push(node);
+  });
+  return nodes;
 }
 
 export { describeElement };

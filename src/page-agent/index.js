@@ -15,10 +15,11 @@ import {
   mutateComponentProps,
   buildComponentTree,
   toCurrentFiber,
+  findUpdatedHostNodes,
 } from './fibers.js';
 import { serialize } from '../shared/serialize.js';
 import { getIn, setIn } from '../shared/paths.js';
-import { showHighlight, hideHighlight } from './overlay.js';
+import { showHighlight, hideHighlight, flashUpdate } from './overlay.js';
 
 (function main() {
   if (window.__RRI_AGENT__) return;
@@ -55,7 +56,19 @@ import { showHighlight, hideHighlight } from './overlay.js';
     }, 300);
   }
 
-  const hookState = installReactHook(() => scheduleAutoRescan());
+  // "Highlight updates" (a la React DevTools): opt-in, off by default — it's
+  // visually noisy and only wanted while actively hunting re-renders. No
+  // round trip to the panel needed; this is purely a page-side visual
+  // effect driven straight off the same commit signal that drives rescans.
+  let highlightUpdatesEnabled = false;
+  function flashUpdatedComponents(root) {
+    for (const node of findUpdatedHostNodes(root)) flashUpdate(node);
+  }
+
+  const hookState = installReactHook((root) => {
+    scheduleAutoRescan();
+    if (highlightUpdatesEnabled) flashUpdatedComponents(root);
+  });
   const registry = createStoreRegistry(send, () => active);
   installReduxShim((store) => registry.register(store, { tier: 1 }));
 
@@ -240,6 +253,33 @@ import { showHighlight, hideHighlight } from './overlay.js';
       const node = serialize(getIn(entry.store.getState(), msg.path));
       send({ type: 'slice', storeId: msg.storeId, path: msg.path, node });
     },
+    'get-store-history'(msg) {
+      const { entries, total } = registry.getHistory(msg.storeId);
+      send({ type: 'store-history', storeId: msg.storeId, entries, total });
+    },
+    'clear-store-history'(msg) {
+      registry.clearHistory(msg.storeId);
+      send({ type: 'store-history', storeId: msg.storeId, entries: [], total: 0 });
+    },
+    'jump-to-action'(msg) {
+      const state = registry.getHistoryStateAt(msg.storeId, msg.seq);
+      if (state === undefined) {
+        throw new Error('That action has scrolled out of history and can no longer be restored.');
+      }
+      let mode;
+      try {
+        mode = registry.edit(msg.storeId, [], state);
+      } catch (err) {
+        send({
+          type: 'edit-result',
+          storeId: msg.storeId,
+          ok: false,
+          error: String((err && err.message) || err),
+        });
+        return;
+      }
+      send({ type: 'edit-result', storeId: msg.storeId, ok: true, mode });
+    },
     'start-pick'() {
       picker.start();
       send({ type: 'pick-state', picking: true });
@@ -292,6 +332,9 @@ import { showHighlight, hideHighlight } from './overlay.js';
     },
     'select-component'(msg) {
       sendComponent(msg.id);
+    },
+    'set-highlight-updates'(msg) {
+      highlightUpdatesEnabled = !!msg.enabled;
     },
   };
 

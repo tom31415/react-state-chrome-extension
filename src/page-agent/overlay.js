@@ -56,3 +56,36 @@ export function showHighlight(node, text) {
 export function hideHighlight() {
   if (container) container.style.display = 'none';
 }
+
+// "Highlight updates" flash — a transient box per re-rendered component,
+// independent of the single persistent highlight box above since several
+// components can flash in the same commit. Each box removes itself.
+const FLASH_MS = 400;
+
+export function flashUpdate(node) {
+  if (!node || typeof node.getBoundingClientRect !== 'function') return;
+  const rect = node.getBoundingClientRect();
+  if (rect.width === 0 && rect.height === 0) return;
+  const box = document.createElement('div');
+  box.setAttribute('data-rri-overlay', '');
+  Object.assign(box.style, {
+    position: 'fixed',
+    zIndex: '2147483647',
+    pointerEvents: 'none',
+    boxSizing: 'border-box',
+    left: `${rect.left}px`,
+    top: `${rect.top}px`,
+    width: `${Math.max(rect.width, 2)}px`,
+    height: `${Math.max(rect.height, 2)}px`,
+    border: '2px solid #f0b400',
+    background: 'rgba(240, 180, 0, 0.25)',
+    borderRadius: '2px',
+    transition: `opacity ${FLASH_MS}ms ease-out`,
+    opacity: '1',
+  });
+  (document.body || document.documentElement).appendChild(box);
+  requestAnimationFrame(() => {
+    box.style.opacity = '0';
+  });
+  setTimeout(() => box.remove(), FLASH_MS + 100);
+}

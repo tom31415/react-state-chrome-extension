@@ -13,13 +13,27 @@
       </nav>
       <div class="actions">
         <button id="pick">⌖ Element selector</button>
+        <button id="highlight-updates">🔆 Highlight updates</button>
         <button id="rescan">↻ Rescan</button>
       </div>
     </header>
     <main>
       <section id="stores-view">
         <aside id="store-list"></aside>
-        <div id="store-tree" class="tree-pane"></div>
+        <div id="store-tree-pane">
+          <div id="store-tree-toolbar">
+            <input id="store-search" type="search" placeholder="Search keys…" />
+            <button id="store-history-toggle">📜 History</button>
+          </div>
+          <div id="store-tree" class="tree-pane"></div>
+        </div>
+        <aside id="store-history-pane" hidden>
+          <div id="store-history-header">
+            <span>Action History</span>
+            <button id="store-history-clear">Clear</button>
+          </div>
+          <div id="store-history-list"></div>
+        </aside>
       </section>
       <section id="component-view" hidden>
         <aside id="component-tree-pane">

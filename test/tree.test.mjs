@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { reconstruct } from '../src/devtools/panel/tree.js';
+import { reconstruct, formatPath, computeTreeSearchVisibility, pathKey } from '../src/devtools/panel/tree.js';
 import { TAG } from '../src/shared/serialize.js';
 
 test('reconstruct round-trips plain JSON', () => {
@@ -30,4 +30,47 @@ test('reconstruct refuses truncated strings and depth stubs', () => {
 test('reconstruct refuses non-JSON tagged values', () => {
   assert.throws(() => reconstruct({ [TAG]: 'fn', name: 'f' }), /Cannot reconstruct/);
   assert.throws(() => reconstruct({ [TAG]: 'undef' }), /not JSON/);
+});
+
+test('formatPath renders plain identifier segments with dot access', () => {
+  assert.equal(formatPath('state', ['user', 'name']), 'state.user.name');
+});
+
+test('formatPath renders numeric segments as array indices', () => {
+  assert.equal(formatPath('state', ['items', '0', 'label']), 'state.items[0].label');
+});
+
+test('formatPath bracket-quotes segments that are not valid identifiers', () => {
+  assert.equal(formatPath('state', ['a-b']), 'state["a-b"]');
+  assert.equal(formatPath('state', ['a b', '1x']), 'state["a b"]["1x"]');
+});
+
+test('formatPath with an empty path returns just the root label', () => {
+  assert.equal(formatPath('state', []), 'state');
+});
+
+test('computeTreeSearchVisibility: empty query means no filtering (null)', () => {
+  assert.equal(computeTreeSearchVisibility('state', { a: 1 }, ''), null);
+  assert.equal(computeTreeSearchVisibility('state', { a: 1 }, '   '), null);
+});
+
+test('computeTreeSearchVisibility: a matching key stays visible along with its ancestors', () => {
+  const tree = { user: { profile: { name: 'ada' }, age: 3 } };
+  const visible = computeTreeSearchVisibility('state', tree, 'name');
+  assert.ok(visible.has(pathKey([])), 'root is an ancestor of the match');
+  assert.ok(visible.has(pathKey(['user'])), 'user is an ancestor of the match');
+  assert.ok(visible.has(pathKey(['user', 'profile'])), 'profile is an ancestor of the match');
+  assert.ok(visible.has(pathKey(['user', 'profile', 'name'])), 'name itself matches');
+  assert.ok(!visible.has(pathKey(['user', 'age'])), 'age has no match and is not an ancestor of one');
+});
+
+test('computeTreeSearchVisibility matches case-insensitively on the root label too', () => {
+  const visible = computeTreeSearchVisibility('myState', { a: 1 }, 'MYSTATE');
+  assert.ok(visible.has(pathKey([])));
+});
+
+test('computeTreeSearchVisibility: no matches anywhere yields an empty (non-null) set', () => {
+  const visible = computeTreeSearchVisibility('state', { a: 1 }, 'zzz-nomatch');
+  assert.notEqual(visible, null);
+  assert.equal(visible.size, 0);
 });

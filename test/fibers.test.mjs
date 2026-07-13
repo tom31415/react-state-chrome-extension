@@ -8,6 +8,7 @@ import {
   getHostNode,
   mutateComponentProps,
   buildComponentTree,
+  findUpdatedHostNodes,
 } from '../src/page-agent/fibers.js';
 
 class FakeClass {
@@ -58,6 +59,63 @@ test('describeComponent reads a function fiber with hooks', () => {
   assert.equal(info.hooks.length, 2);
   assert.equal(info.hooks[0].value, 41);
   assert.equal(info.hooks[1].value, 'second');
+  assert.deepEqual(info.context, [], 'no dependencies on this fiber');
+});
+
+test('describeComponent reads context via the React 18+ dependencies.firstContext shape', () => {
+  const themeContext = { displayName: 'ThemeContext' };
+  const dep = { context: themeContext, memoizedValue: 'dark', next: null };
+  const fiber = {
+    tag: 0,
+    type: Named,
+    return: null,
+    key: null,
+    memoizedProps: {},
+    memoizedState: null,
+    dependencies: { firstContext: dep },
+    stateNode: null,
+  };
+  const info = describeComponent({ kind: 'fiber', ref: fiber });
+  assert.deepEqual(info.context, [{ name: 'ThemeContext', value: 'dark' }]);
+});
+
+test('describeComponent reads context via the pre-18 contextDependencies.first shape', () => {
+  const authContext = { _currentValue: { user: 'ada' } }; // no displayName, no memoizedValue on the dep node
+  const dep = { context: authContext, next: null };
+  const fiber = {
+    tag: 0,
+    type: Named,
+    return: null,
+    key: null,
+    memoizedProps: {},
+    memoizedState: null,
+    contextDependencies: { first: dep },
+    stateNode: null,
+  };
+  const info = describeComponent({ kind: 'fiber', ref: fiber });
+  assert.equal(info.context.length, 1);
+  assert.equal(info.context[0].name, 'Context 1', 'falls back to a numbered name with no displayName');
+  assert.deepEqual(info.context[0].value, { user: 'ada' });
+});
+
+test('describeComponent reads multiple consumed contexts in order', () => {
+  const depB = { context: { displayName: 'B' }, memoizedValue: 2, next: null };
+  const depA = { context: { displayName: 'A' }, memoizedValue: 1, next: depB };
+  const fiber = {
+    tag: 0,
+    type: Named,
+    return: null,
+    key: null,
+    memoizedProps: {},
+    memoizedState: null,
+    dependencies: { firstContext: depA },
+    stateNode: null,
+  };
+  const info = describeComponent({ kind: 'fiber', ref: fiber });
+  assert.deepEqual(info.context, [
+    { name: 'A', value: 1 },
+    { name: 'B', value: 2 },
+  ]);
 });
 
 test('describeComponent reads a class fiber state', () => {
@@ -139,6 +197,7 @@ test('describeComponent reads a React 15 internal instance', () => {
   assert.equal(info.canEditProps, true);
   assert.deepEqual(info.props, { a: 1 });
   assert.deepEqual(info.state, { open: true });
+  assert.deepEqual(info.context, [], 'legacy context (contextTypes) is out of scope');
 });
 
 test('describeComponent resolves the current fiber generation after a re-render', () => {
@@ -228,6 +287,35 @@ test('getHostNode returns the first host descendant in tree (DFS) order', () => 
   // BFS would visit shallowLate (depth 2) before deepFirst (depth 2 via child) —
   // ordering by tree position must pick FIRST.
   assert.equal(getHostNode({ kind: 'fiber', ref: root }), 'FIRST');
+});
+
+test('findUpdatedHostNodes collects only composite fibers with PerformedWork set (flags, React 18+)', () => {
+  const hostA = { tag: 5, type: 'div', stateNode: 'DOM-A', child: null, sibling: null, return: null };
+  const updatedComp = { tag: 0, type: Named, flags: 1, child: hostA, sibling: null, return: null, stateNode: null };
+  hostA.return = updatedComp;
+  const hostB = { tag: 5, type: 'span', stateNode: 'DOM-B', child: null, sibling: null, return: null };
+  const bailedOutComp = { tag: 0, type: Named, flags: 0, child: hostB, sibling: null, return: null, stateNode: null };
+  hostB.return = bailedOutComp;
+  updatedComp.sibling = bailedOutComp;
+  const root = { current: { tag: 3, child: updatedComp, sibling: null, return: null } };
+  updatedComp.return = root.current;
+
+  assert.deepEqual(findUpdatedHostNodes(root), ['DOM-A']);
+});
+
+test('findUpdatedHostNodes also reads the pre-18 effectTag field name', () => {
+  const host = { tag: 5, type: 'div', stateNode: 'DOM-X', child: null, sibling: null, return: null };
+  const comp = { tag: 0, type: Named, effectTag: 1, child: host, sibling: null, return: null, stateNode: null };
+  host.return = comp;
+  const root = { current: { tag: 3, child: comp, sibling: null, return: null } };
+  comp.return = root.current;
+
+  assert.deepEqual(findUpdatedHostNodes(root), ['DOM-X']);
+});
+
+test('findUpdatedHostNodes returns nothing for a root with no current tree', () => {
+  assert.deepEqual(findUpdatedHostNodes(null), []);
+  assert.deepEqual(findUpdatedHostNodes({}), []);
 });
 
 test('getHostNode highlights the parent element for text-only components', () => {

@@ -14,9 +14,12 @@ const state = {
   component: null,
   selectedStoreId: null,
   picking: false,
+  highlightUpdates: false,
   tab: 'stores',
   componentTree: { roots: [], truncated: false, total: 0, focusId: null },
   componentTreeRequested: false,
+  historyPaneOpen: false,
+  storeHistories: new Map(), // id -> { entries: [{seq, type}], total }
 };
 
 // ---------- connection ----------
@@ -56,6 +59,8 @@ function onPortMessage(msg) {
       state.storeStates.clear();
       state.component = null;
       state.picking = false;
+      state.highlightUpdates = false;
+      renderHighlightUpdatesButton();
       state.componentTree = { roots: [], truncated: false, total: 0, focusId: null };
       state.componentTreeRequested = false;
       $('#component-search').value = '';
@@ -63,6 +68,11 @@ function onPortMessage(msg) {
       componentTree.setData(state.componentTree);
       componentTree.setSelected(null);
       renderComponentFocusBar();
+      $('#store-search').value = '';
+      storeTree.setQuery('');
+      state.historyPaneOpen = false;
+      state.storeHistories.clear();
+      renderStoreHistory();
       sendToAgent({ type: 'init' });
       renderAll();
       break;
@@ -74,6 +84,7 @@ function onPortMessage(msg) {
       state.stores = msg.stores;
       if (!state.stores.some((s) => s.id === state.selectedStoreId)) {
         state.selectedStoreId = state.stores.length ? state.stores[0].id : null;
+        if (state.historyPaneOpen) requestStoreHistory(state.selectedStoreId);
       }
       renderStores();
       break;
@@ -84,6 +95,18 @@ function onPortMessage(msg) {
     case 'slice':
       mergeSlice(msg.storeId, msg.path, msg.node);
       break;
+    case 'store-history':
+      state.storeHistories.set(msg.storeId, { entries: msg.entries, total: msg.total });
+      if (msg.storeId === state.selectedStoreId) renderStoreHistory();
+      break;
+    case 'store-action': {
+      const existing = state.storeHistories.get(msg.storeId) || { entries: [], total: 0 };
+      const entries = [...existing.entries, { seq: msg.seq, type: msg.actionType }];
+      if (entries.length > 50) entries.shift(); // mirrors the agent's own MAX_HISTORY cap
+      state.storeHistories.set(msg.storeId, { entries, total: msg.total });
+      if (msg.storeId === state.selectedStoreId) renderStoreHistory();
+      break;
+    }
     case 'edit-result':
       if (!msg.ok) toast(`Edit failed: ${msg.error}`, 'error');
       else if (msg.mode === 'ephemeral')
@@ -195,7 +218,9 @@ function renderAll() {
   renderStores();
   renderComponent();
   renderPickButton();
+  renderHighlightUpdatesButton();
   renderComponentFocusBar();
+  renderStoreHistory();
 }
 
 function renderEnv() {
@@ -252,13 +277,63 @@ function renderStores() {
     item.appendChild(
       chip(store.tier === 1 ? 'full edit' : 'ephemeral edit', store.tier === 1 ? 'chip-ok' : 'chip-warn')
     );
-    item.addEventListener('click', () => {
-      state.selectedStoreId = store.id;
-      renderStores();
-    });
+    item.addEventListener('click', () => selectStore(store.id));
     list.appendChild(item);
   }
   renderStoreTree();
+}
+
+function selectStore(id) {
+  if (id === state.selectedStoreId) return;
+  state.selectedStoreId = id;
+  renderStores();
+  if (state.historyPaneOpen) requestStoreHistory(id);
+  else renderStoreHistory();
+}
+
+function requestStoreHistory(id) {
+  if (id == null) return;
+  sendToAgent({ type: 'get-store-history', storeId: id });
+}
+
+function renderStoreHistory() {
+  const pane = $('#store-history-pane');
+  pane.hidden = !state.historyPaneOpen;
+  if (!state.historyPaneOpen) return;
+  const list = $('#store-history-list');
+  list.textContent = '';
+  const id = state.selectedStoreId;
+  const history = id == null ? null : state.storeHistories.get(id);
+  if (!history || history.entries.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'empty';
+    empty.textContent = id == null ? 'No store selected.' : 'No actions recorded yet.';
+    list.appendChild(empty);
+    return;
+  }
+  if (history.total > history.entries.length) {
+    const note = document.createElement('div');
+    note.className = 'tree-note';
+    note.textContent = `Showing the last ${history.entries.length} of ${history.total} actions.`;
+    list.appendChild(note);
+  }
+  for (const entry of history.entries) {
+    const row = document.createElement('div');
+    row.className = 'history-row';
+    row.title = 'Jump to this state';
+    const seq = document.createElement('span');
+    seq.className = 'history-seq';
+    seq.textContent = `#${entry.seq}`;
+    const type = document.createElement('span');
+    type.className = 'history-type';
+    type.textContent = entry.type;
+    row.appendChild(seq);
+    row.appendChild(type);
+    row.addEventListener('click', () =>
+      sendToAgent({ type: 'jump-to-action', storeId: id, seq: entry.seq })
+    );
+    list.appendChild(row);
+  }
 }
 
 function renderStoreTree() {
@@ -349,6 +424,14 @@ function renderComponent() {
       createTree(pane, { rootLabel: 'hooks' }).setData(synthetic);
     });
   }
+
+  if (c.context && c.context.length) {
+    addSection(view, 'Context', (pane) => {
+      const synthetic = {};
+      for (const ctx of c.context) synthetic[ctx.name] = ctx.value;
+      createTree(pane, { rootLabel: 'context' }).setData(synthetic);
+    });
+  }
 }
 
 function addSection(parent, name, fill) {
@@ -371,6 +454,10 @@ function renderPickButton() {
     : '⌖ Element selector';
 }
 
+function renderHighlightUpdatesButton() {
+  $('#highlight-updates').classList.toggle('active', state.highlightUpdates);
+}
+
 // ---------- toasts ----------
 
 function toast(message, kind = 'ok') {
@@ -387,6 +474,20 @@ $('#rescan').addEventListener('click', () => sendToAgent({ type: 'rescan' }));
 $('#pick').addEventListener('click', () => {
   sendToAgent({ type: state.picking ? 'stop-pick' : 'start-pick' });
 });
+$('#highlight-updates').addEventListener('click', () => {
+  state.highlightUpdates = !state.highlightUpdates;
+  renderHighlightUpdatesButton();
+  sendToAgent({ type: 'set-highlight-updates', enabled: state.highlightUpdates });
+});
+$('#store-history-toggle').addEventListener('click', () => {
+  state.historyPaneOpen = !state.historyPaneOpen;
+  $('#store-history-toggle').classList.toggle('active', state.historyPaneOpen);
+  if (state.historyPaneOpen) requestStoreHistory(state.selectedStoreId);
+  renderStoreHistory();
+});
+$('#store-history-clear').addEventListener('click', () => {
+  if (state.selectedStoreId != null) sendToAgent({ type: 'clear-store-history', storeId: state.selectedStoreId });
+});
 $('#tab-stores').addEventListener('click', () => {
   state.tab = 'stores';
   renderTabs();
@@ -396,6 +497,7 @@ $('#tab-component').addEventListener('click', () => {
   renderTabs();
 });
 $('#component-search').addEventListener('input', (e) => componentTree.setQuery(e.target.value));
+$('#store-search').addEventListener('input', (e) => storeTree.setQuery(e.target.value));
 $('#component-focus-clear').addEventListener('click', () =>
   sendToAgent({ type: 'get-component-tree', focusId: null })
 );

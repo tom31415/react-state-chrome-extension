@@ -33,7 +33,7 @@ export function installReactHook(onCommit) {
       existing.onCommitFiberRoot = function (id, root, ...rest) {
         try {
           trackRoot(state, root);
-          if (onCommit) onCommit();
+          if (onCommit) onCommit(root);
         } catch {
           // never break the host hook
         }
@@ -59,7 +59,7 @@ export function installReactHook(onCommit) {
     },
     onCommitFiberRoot(_id, root) {
       trackRoot(state, root);
-      if (onCommit) onCommit();
+      if (onCommit) onCommit(root);
     },
     onCommitFiberUnmount() {},
     onScheduleFiberRoot() {},
