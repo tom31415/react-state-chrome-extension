@@ -3,6 +3,7 @@
 
 import { createTree } from './tree.js';
 import { createComponentTree } from './componentTree.js';
+import { createQueryList } from './queryList.js';
 import { TAG, isTagged } from '../../shared/serialize.js';
 
 const $ = (sel) => document.querySelector(sel);
@@ -20,6 +21,20 @@ const state = {
   componentTreeRequested: false,
   historyPaneOpen: false,
   storeHistories: new Map(), // id -> { entries: [{seq, type}], total }
+  queries: [],
+  mutations: [],
+  queryKind: 'queries', // 'queries' | 'mutations'
+  selectedQueryId: null,
+  queryDetail: null, // full detail payload for selectedQueryId, or null
+  queryDetailGone: false,
+};
+
+const ACTION_LABELS = {
+  refetch: 'Refetched',
+  invalidate: 'Invalidated',
+  reset: 'Reset',
+  remove: 'Removed',
+  'remove-mutation': 'Removed',
 };
 
 // A page/service-worker reconnect (see the 'agent-ready' case below) clears
@@ -100,6 +115,19 @@ function onPortMessage(msg) {
       state.historyPaneOpen = false;
       state.storeHistories.clear();
       renderStoreHistory();
+      state.queries = [];
+      state.mutations = [];
+      state.queryKind = 'queries';
+      state.selectedQueryId = null;
+      state.queryDetail = null;
+      state.queryDetailGone = false;
+      $('#query-search').value = '';
+      queryList.setQuery('');
+      queryList.setData([]);
+      queryList.setSelected(null);
+      $('#query-kind-queries').classList.add('active');
+      $('#query-kind-mutations').classList.remove('active');
+      renderQueryDetail();
       sendToAgent({ type: 'init' });
       renderAll();
       break;
@@ -167,6 +195,30 @@ function onPortMessage(msg) {
     case 'error':
       toast(msg.message, 'error');
       break;
+    case 'queries':
+      state.queries = msg.queries;
+      renderQueryList();
+      break;
+    case 'mutations':
+      state.mutations = msg.mutations;
+      renderQueryList();
+      break;
+    case 'query-detail':
+    case 'mutation-detail':
+      if (msg.id === state.selectedQueryId) {
+        state.queryDetail = msg.gone ? null : msg;
+        state.queryDetailGone = !!msg.gone;
+        renderQueryDetail();
+      }
+      break;
+    case 'query-action-result':
+      if (!msg.ok) toast(`Action failed: ${msg.error}`, 'error');
+      else toast(`${ACTION_LABELS[msg.action] || 'Done'}.`, 'ok');
+      break;
+    case 'query-edit-result':
+      if (!msg.ok) toast(`Edit failed: ${msg.error}`, 'error');
+      else toast('Query data updated.', 'ok');
+      break;
   }
 }
 
@@ -199,6 +251,13 @@ const componentTree = createComponentTree($('#component-tree'), {
   },
 });
 
+const queryList = createQueryList($('#query-list'), {
+  emptyMessage: 'No queries found yet. If the app creates its QueryClient before scanning, hit Rescan.',
+  onSelect(id) {
+    selectQueryRow(id);
+  },
+});
+
 function renderComponentFocusBar() {
   const bar = $('#component-focus-bar');
   const focusId = state.componentTree.focusId;
@@ -207,6 +266,104 @@ function renderComponentFocusBar() {
     const name = state.componentTree.roots[0]?.name || 'component';
     $('#component-focus-label').textContent = `Focused on <${name}>`;
   }
+}
+
+function renderQueryList() {
+  queryList.setData(state.queryKind === 'queries' ? state.queries : state.mutations);
+}
+
+function selectQueryRow(id) {
+  state.selectedQueryId = id;
+  state.queryDetail = null;
+  state.queryDetailGone = false;
+  queryList.setSelected(id);
+  renderQueryDetail();
+  sendToAgent({
+    type: state.queryKind === 'queries' ? 'get-query-detail' : 'get-mutation-detail',
+    id,
+  });
+}
+
+function setQueryKind(kind) {
+  if (state.queryKind === kind) return;
+  state.queryKind = kind;
+  state.selectedQueryId = null;
+  state.queryDetail = null;
+  state.queryDetailGone = false;
+  $('#query-kind-queries').classList.toggle('active', kind === 'queries');
+  $('#query-kind-mutations').classList.toggle('active', kind === 'mutations');
+  queryList.setSelected(null);
+  renderQueryList();
+  renderQueryDetail();
+}
+
+function renderQueryDetail() {
+  const view = $('#query-detail');
+  view.textContent = '';
+  const d = state.queryDetail;
+  if (!d) {
+    const empty = document.createElement('div');
+    empty.className = 'empty';
+    empty.textContent = state.queryDetailGone
+      ? 'This entry is no longer in the cache.'
+      : state.selectedQueryId
+        ? 'Loading…'
+        : `Select a ${state.queryKind === 'queries' ? 'query' : 'mutation'} to inspect it.`;
+    view.appendChild(empty);
+    return;
+  }
+
+  const header = document.createElement('div');
+  header.className = 'component-header';
+  const title = document.createElement('h2');
+  title.textContent = state.queryKind === 'queries' ? JSON.stringify(d.queryKey) : `Mutation #${d.mutationId}`;
+  header.appendChild(title);
+  header.appendChild(chip(d.status, d.status === 'error' ? 'chip-err' : d.status === 'success' ? 'chip-ok' : 'chip-warn'));
+  if (state.queryKind === 'queries') header.appendChild(chip(d.fetchStatus, 'chip-dim'));
+  view.appendChild(header);
+
+  if (d.error) {
+    const err = document.createElement('div');
+    err.className = 'component-meta';
+    err.textContent = `Error: ${d.error}`;
+    view.appendChild(err);
+  }
+
+  const actions = document.createElement('div');
+  actions.className = 'query-actions';
+  if (state.queryKind === 'queries') {
+    actions.appendChild(actionButton('Refetch', () => sendToAgent({ type: 'refetch-query', id: d.id })));
+    actions.appendChild(actionButton('Invalidate', () => sendToAgent({ type: 'invalidate-query', id: d.id })));
+    actions.appendChild(actionButton('Reset', () => sendToAgent({ type: 'reset-query', id: d.id })));
+    actions.appendChild(actionButton('Remove', () => sendToAgent({ type: 'remove-query', id: d.id })));
+  } else {
+    actions.appendChild(actionButton('Remove', () => sendToAgent({ type: 'remove-mutation', id: d.id })));
+  }
+  view.appendChild(actions);
+
+  addSection(view, state.queryKind === 'queries' ? 'Data (editable)' : 'Data', (pane) => {
+    createTree(pane, {
+      rootLabel: 'data',
+      onEdit:
+        state.queryKind === 'queries'
+          ? (path, json) => sendToAgent({ type: 'edit-query-data', id: d.id, path, json })
+          : undefined,
+      onToast: toast,
+    }).setData(d.data);
+  });
+
+  if (state.queryKind === 'mutations' && d.variables !== undefined) {
+    addSection(view, 'Variables', (pane) => {
+      createTree(pane, { rootLabel: 'variables' }).setData(d.variables);
+    });
+  }
+}
+
+function actionButton(label, onClick) {
+  const btn = document.createElement('button');
+  btn.textContent = label;
+  btn.addEventListener('click', onClick);
+  return btn;
 }
 
 function mergeSlice(storeId, path, replacement) {
@@ -248,6 +405,8 @@ function renderAll() {
   renderHighlightUpdatesButton();
   renderComponentFocusBar();
   renderStoreHistory();
+  renderQueryList();
+  renderQueryDetail();
 }
 
 function renderEnv() {
@@ -277,8 +436,10 @@ function chip(text, cls = '') {
 function renderTabs() {
   $('#tab-stores').classList.toggle('active', state.tab === 'stores');
   $('#tab-component').classList.toggle('active', state.tab === 'component');
+  $('#tab-queries').classList.toggle('active', state.tab === 'queries');
   $('#stores-view').hidden = state.tab !== 'stores';
   $('#component-view').hidden = state.tab !== 'component';
+  $('#queries-view').hidden = state.tab !== 'queries';
   if (state.tab === 'component' && !state.componentTreeRequested) {
     state.componentTreeRequested = true;
     sendToAgent({ type: 'get-component-tree' });
@@ -534,6 +695,13 @@ $('#tab-component').addEventListener('click', () => {
   state.tab = 'component';
   renderTabs();
 });
+$('#tab-queries').addEventListener('click', () => {
+  state.tab = 'queries';
+  renderTabs();
+});
+$('#query-kind-queries').addEventListener('click', () => setQueryKind('queries'));
+$('#query-kind-mutations').addEventListener('click', () => setQueryKind('mutations'));
+$('#query-search').addEventListener('input', (e) => queryList.setQuery(e.target.value));
 $('#component-search').addEventListener('input', (e) => componentTree.setQuery(e.target.value));
 $('#store-search').addEventListener('input', (e) => storeTree.setQuery(e.target.value));
 $('#component-focus-clear').addEventListener('click', () =>

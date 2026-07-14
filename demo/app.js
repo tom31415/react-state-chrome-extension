@@ -27,6 +27,43 @@
 
   const ThemeContext = React.createContext('light');
 
+  // staleTime: 0 (react-query's default) marks data stale the instant it
+  // resolves, so the panel's "fresh" badge would never actually be
+  // observable — a brief real window matches how apps normally tune this.
+  const queryClient = new ReactQuery.QueryClient({
+    defaultOptions: { queries: { staleTime: 30000 } },
+  });
+
+  function fakeFetchUser(id) {
+    return new Promise((resolve) => {
+      setTimeout(() => resolve({ id, name: id === '1' ? 'Ada Lovelace' : 'Grace Hopper' }), 150);
+    });
+  }
+
+  function UserQuery() {
+    const [userId, setUserId] = React.useState('1');
+    const query = ReactQuery.useQuery({
+      queryKey: ['user', userId],
+      queryFn: () => fakeFetchUser(userId),
+    });
+    return e('section', { id: 'user-query' },
+      e('h2', null, 'UserQuery (React Query)'),
+      e('p', null, `status: ${query.status} — ${query.data ? query.data.name : '(no data yet)'}`),
+      e('button', { onClick: () => setUserId(userId === '1' ? '2' : '1') }, 'Switch user')
+    );
+  }
+
+  function AddCommentMutation() {
+    const mutation = ReactQuery.useMutation({
+      mutationFn: (text) => new Promise((resolve) => setTimeout(() => resolve({ text }), 100)),
+    });
+    return e('section', { id: 'comment-mutation' },
+      e('h2', null, 'AddCommentMutation (React Query)'),
+      e('p', null, `status: ${mutation.status}`),
+      e('button', { onClick: () => mutation.mutate('a demo comment') }, 'Submit comment')
+    );
+  }
+
   // --- Components ---
   class ClassCounter extends React.Component {
     constructor(props) {
@@ -76,7 +113,10 @@
       e(ClassCounter, { label: 'class component, local state' }),
       e(ReactRedux.Provider, { store: counterStore }, e(HookCounter, { label: 'hooks + react-redux' })),
       e(ReactRedux.Provider, { store: todoStore }, e(TodoList)),
-      e(ThemeContext.Provider, { value: 'dark' }, e(ThemedBadge))
+      e(ThemeContext.Provider, { value: 'dark' }, e(ThemedBadge)),
+      e(ReactQuery.QueryClientProvider, { client: queryClient },
+        e(React.Fragment, null, e(UserQuery), e(AddCommentMutation))
+      )
     );
   }
 

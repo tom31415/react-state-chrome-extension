@@ -7,6 +7,7 @@
     <script crossorigin="anonymous" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js"></script>
     <script crossorigin="anonymous" integrity="sha384-ME6tSOuR9paPKtP9K+mrPCHdkGJch/V4T4FBYB64Rsns3yJF3jhx83W1+JpoJSIb" src="https://unpkg.com/redux@4.2.1/dist/redux.js"></script>
     <script crossorigin="anonymous" integrity="sha384-SolceUhVnIawRDbgCOJYlDOxNY288CfgrFwenvmpC4S9ucmE/Sd+rBLIKeoI/3u1" src="https://unpkg.com/react-redux@8.1.3/dist/react-redux.min.js"></script>
+    <script crossorigin="anonymous" integrity="sha384-t+m5ipCzPIH91KFo2L/QRcy++vHmD0d/Ii2M9pP3eaIhIRnsBQtU5sEnxyvkXUHH" src="https://unpkg.com/@tanstack/react-query@4.44.0/build/umd/index.production.js"></script>
     <style>
       body { font-family: sans-serif; margin: 2rem; }
       section { border: 1px solid #ccc; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
@@ -19,6 +20,8 @@
       Load the extension (dist/ unpacked), open DevTools → “React+Redux”. Store “counter”
       is created through the devtools enhancer (tier 1, persistent edits); store “todos”
       is only discoverable through its react-redux Provider (tier 3, ephemeral edits).
+      The Queries tab shows a React Query QueryClient with one query (switchable between
+      two users) and one mutation.
     </p>
     <div id="root"></div>
     <script src="app.js"></script>

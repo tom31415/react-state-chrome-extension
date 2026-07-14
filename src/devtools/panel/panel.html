@@ -10,6 +10,7 @@
       <nav>
         <button id="tab-stores" class="tab active">Stores</button>
         <button id="tab-component" class="tab">Component</button>
+        <button id="tab-queries" class="tab">Queries</button>
       </nav>
       <div class="actions">
         <button id="pick">⌖ Element selector</button>
@@ -45,6 +46,19 @@
           <div id="component-tree"></div>
         </aside>
         <div id="component-detail"></div>
+      </section>
+      <section id="queries-view" hidden>
+        <aside id="query-list-pane">
+          <div id="query-list-toolbar">
+            <input id="query-search" type="search" placeholder="Search queries…" />
+            <div class="pill-toggle">
+              <button id="query-kind-queries" class="pill active">Queries</button>
+              <button id="query-kind-mutations" class="pill">Mutations</button>
+            </div>
+          </div>
+          <div id="query-list"></div>
+        </aside>
+        <div id="query-detail"></div>
       </section>
     </main>
     <div id="toasts"></div>

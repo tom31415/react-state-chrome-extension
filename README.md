@@ -13,6 +13,9 @@ and newer** — with first-class Redux support:
   highlighted by name, and click to select. The panel shows the component's name, kind
   (class / function / memo / forwardRef), props, state, and hooks — and lets you edit
   class component state.
+- **React Query support**: detects `@tanstack/react-query` (v4/v5) `QueryClient` instances,
+  lists their queries and mutations live, and lets you inspect data, edit it, and
+  refetch/invalidate/reset/remove individual queries.
 
 ## Install
 
@@ -41,6 +44,15 @@ If the real Redux DevTools extension is installed, the shim chains to it — bot
 If the real React DevTools extension is installed, its global hook is left untouched and
 this extension falls back to scanning the DOM for React roots (fully supported; the
 "Rescan" button re-runs discovery at any time).
+
+## How React Query support works
+
+`QueryClientProvider`'s `client` prop is found the same way react-redux's `Provider` store
+is (a fiber-tree walk), plus a window-global fallback (`window.queryClient`, etc.) — React
+Query has no enhancer-style interception point the way Redux DevTools does, so there's no
+"tier 1" equivalent. That also means every discovered client already exposes its full public
+API: unlike Redux, there's no ephemeral-vs-persistent split — edits and actions
+(Refetch/Invalidate/Reset/Remove) always take full, real effect.
 
 ## Development
 

@@ -22,12 +22,25 @@ test('tree shows every composite component, flattened through the Fragment root'
       [...document.querySelectorAll('.component-name')].map((el) => el.textContent)
     )
   ).sort();
-  // react-redux's own <Provider> IS a real composite component (unlike a raw
-  // Context.Provider, which is flattened through) — it shows up here too,
-  // just named "Anonymous" since the minified UMD build has no displayName.
+  // react-redux's own <Provider> and react-query's own <QueryClientProvider>
+  // ARE real composite components (unlike a raw Context.Provider, which is
+  // flattened through) — they show up here too, just named "Anonymous"
+  // since the minified UMD builds have no displayName. Two Providers plus
+  // one QueryClientProvider account for the three "Anonymous" entries.
   assert.deepEqual(
     names,
-    ['Anonymous', 'Anonymous', 'App', 'ClassCounter', 'HookCounter', 'TodoList', 'ThemedBadge'].sort()
+    [
+      'Anonymous',
+      'Anonymous',
+      'Anonymous',
+      'AddCommentMutation',
+      'App',
+      'ClassCounter',
+      'HookCounter',
+      'TodoList',
+      'ThemedBadge',
+      'UserQuery',
+    ].sort()
   );
 });
 
