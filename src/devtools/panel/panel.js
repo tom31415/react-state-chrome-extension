@@ -258,6 +258,19 @@ const queryList = createQueryList($('#query-list'), {
   },
 });
 
+// The Queries tab's detail pane follows the same create-once,
+// update-via-setData discipline as storeTree above: a structural rebuild
+// (header shell, action buttons, tree instance creation) only happens when
+// the selected item's IDENTITY changes (new selection, or switching
+// Queries<->Mutations) — tracked by queryDetailKey. Same-identity pushes
+// (every throttled cache event while a query is fetching, or after
+// Refetch/Invalidate/etc.) update the existing tree(s) via setData, exactly
+// like storeTree.setData() does, instead of tearing down and losing
+// expansion state, scroll position, and any in-flight edit input.
+let queryDetailKey = null; // `${kind}:${id}` of what's currently built, or null
+let queryDetailTree = null; // primary Data/Variables-adjacent tree instance
+let queryDetailVariablesTree = null; // mutations' extra "Variables" tree instance, when present
+
 function renderComponentFocusBar() {
   const bar = $('#component-focus-bar');
   const focusId = state.componentTree.focusId;
@@ -299,9 +312,16 @@ function setQueryKind(kind) {
 
 function renderQueryDetail() {
   const view = $('#query-detail');
-  view.textContent = '';
   const d = state.queryDetail;
+
   if (!d) {
+    // Nothing to update in place (no selection, still loading, or the
+    // entry is gone) — reset identity so the NEXT real detail rebuilds
+    // fresh rather than trying to update a pane with no tree in it.
+    queryDetailKey = null;
+    queryDetailTree = null;
+    queryDetailVariablesTree = null;
+    view.textContent = '';
     const empty = document.createElement('div');
     empty.className = 'empty';
     empty.textContent = state.queryDetailGone
@@ -313,50 +333,76 @@ function renderQueryDetail() {
     return;
   }
 
-  const header = document.createElement('div');
-  header.className = 'component-header';
+  const key = `${state.queryKind}:${d.id}`;
+  if (key !== queryDetailKey) {
+    // Identity changed (new selection, or switched Queries<->Mutations):
+    // full structural rebuild, including fresh tree instance(s).
+    queryDetailKey = key;
+    view.textContent = '';
+
+    const header = document.createElement('div');
+    header.className = 'component-header';
+    header.id = 'query-detail-header';
+    view.appendChild(header);
+
+    const errBox = document.createElement('div');
+    errBox.className = 'component-meta';
+    errBox.id = 'query-detail-error';
+    errBox.hidden = true;
+    view.appendChild(errBox);
+
+    const actions = document.createElement('div');
+    actions.className = 'query-actions';
+    if (state.queryKind === 'queries') {
+      actions.appendChild(actionButton('Refetch', () => sendToAgent({ type: 'refetch-query', id: d.id })));
+      actions.appendChild(actionButton('Invalidate', () => sendToAgent({ type: 'invalidate-query', id: d.id })));
+      actions.appendChild(actionButton('Reset', () => sendToAgent({ type: 'reset-query', id: d.id })));
+      actions.appendChild(actionButton('Remove', () => sendToAgent({ type: 'remove-query', id: d.id })));
+    } else {
+      actions.appendChild(actionButton('Remove', () => sendToAgent({ type: 'remove-mutation', id: d.id })));
+    }
+    view.appendChild(actions);
+
+    queryDetailTree = null;
+    addSection(view, state.queryKind === 'queries' ? 'Data (editable)' : 'Data', (pane) => {
+      queryDetailTree = createTree(pane, {
+        rootLabel: 'data',
+        onEdit:
+          state.queryKind === 'queries'
+            ? (path, json) => sendToAgent({ type: 'edit-query-data', id: d.id, path, json })
+            : undefined,
+        onToast: toast,
+      });
+    });
+
+    queryDetailVariablesTree = null;
+    if (state.queryKind === 'mutations' && d.variables !== undefined) {
+      addSection(view, 'Variables', (pane) => {
+        queryDetailVariablesTree = createTree(pane, { rootLabel: 'variables' });
+      });
+    }
+  }
+
+  // Same identity as last time (or just built fresh above): update
+  // status/error/data in place. The header is small and fully stateless
+  // (no scroll/expansion state lives in it) so a cheap full re-render of
+  // just that sub-tree is fine; the tree(s) below use setData so their
+  // expansion state and #query-detail's scroll position survive, exactly
+  // like storeTree.setData() already does for the Stores tab.
+  const header = $('#query-detail-header');
+  header.textContent = '';
   const title = document.createElement('h2');
   title.textContent = state.queryKind === 'queries' ? JSON.stringify(d.queryKey) : `Mutation #${d.mutationId}`;
   header.appendChild(title);
   header.appendChild(chip(d.status, d.status === 'error' ? 'chip-err' : d.status === 'success' ? 'chip-ok' : 'chip-warn'));
   if (state.queryKind === 'queries') header.appendChild(chip(d.fetchStatus, 'chip-dim'));
-  view.appendChild(header);
 
-  if (d.error) {
-    const err = document.createElement('div');
-    err.className = 'component-meta';
-    err.textContent = `Error: ${d.error}`;
-    view.appendChild(err);
-  }
+  const errBox = $('#query-detail-error');
+  errBox.hidden = !d.error;
+  errBox.textContent = d.error ? `Error: ${d.error}` : '';
 
-  const actions = document.createElement('div');
-  actions.className = 'query-actions';
-  if (state.queryKind === 'queries') {
-    actions.appendChild(actionButton('Refetch', () => sendToAgent({ type: 'refetch-query', id: d.id })));
-    actions.appendChild(actionButton('Invalidate', () => sendToAgent({ type: 'invalidate-query', id: d.id })));
-    actions.appendChild(actionButton('Reset', () => sendToAgent({ type: 'reset-query', id: d.id })));
-    actions.appendChild(actionButton('Remove', () => sendToAgent({ type: 'remove-query', id: d.id })));
-  } else {
-    actions.appendChild(actionButton('Remove', () => sendToAgent({ type: 'remove-mutation', id: d.id })));
-  }
-  view.appendChild(actions);
-
-  addSection(view, state.queryKind === 'queries' ? 'Data (editable)' : 'Data', (pane) => {
-    createTree(pane, {
-      rootLabel: 'data',
-      onEdit:
-        state.queryKind === 'queries'
-          ? (path, json) => sendToAgent({ type: 'edit-query-data', id: d.id, path, json })
-          : undefined,
-      onToast: toast,
-    }).setData(d.data);
-  });
-
-  if (state.queryKind === 'mutations' && d.variables !== undefined) {
-    addSection(view, 'Variables', (pane) => {
-      createTree(pane, { rootLabel: 'variables' }).setData(d.variables);
-    });
-  }
+  queryDetailTree.setData(d.data);
+  if (queryDetailVariablesTree) queryDetailVariablesTree.setData(d.variables);
 }
 
 function actionButton(label, onClick) {

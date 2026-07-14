@@ -66,6 +66,46 @@ test('Refetch overwrites the local edit once the fake fetch resolves again', asy
   assert.match(appText, /Ada Lovelace/, "the real queryFn's result wins back over the edit");
 });
 
+test("a live Refetch update preserves the data tree's expansion state (create-once, update-via-setData)", async () => {
+  // Re-select the user query fresh (clicking a query row always re-fires
+  // onSelect, even when it's already selected — see queryList.js) so we
+  // start from a known, default-expanded tree: the root node open, its two
+  // leaf fields (id/name) showing.
+  await clickRowContaining(session.panelPage, '.query-row', '"1"');
+  await session.settle();
+
+  const beforeCollapse = await treeRowTexts(session.panelPage, '#query-detail .tree-row');
+  assert.ok(
+    beforeCollapse.length >= 3,
+    `expected the root row plus its id/name leaves, got: ${JSON.stringify(beforeCollapse)}`
+  );
+
+  // Collapse the root — since the tree starts fully expanded by default,
+  // this is a real, observable change to expansion state (hides the leaves).
+  const rootTwisty = await session.panelPage.$('#query-detail .tree-row .twisty:not(.twisty-none)');
+  assert.ok(rootTwisty, 'expected the root row to have a twisty (it is a container)');
+  await rootTwisty.click();
+  await session.panelPage.waitForTimeout(50);
+
+  const afterCollapse = await treeRowTexts(session.panelPage, '#query-detail .tree-row');
+  assert.equal(afterCollapse.length, 1, 'collapsing the root should hide its child rows');
+
+  // Trigger a live update to the SAME query without changing selection —
+  // renderQueryDetail() must update the existing tree via setData rather
+  // than tearing it down and recreating it, or the tree's internal
+  // expanded-node Set would reset and the root would default back open.
+  await session.panelPage.click('#query-detail button:has-text("Refetch")');
+  await session.panelPage.waitForTimeout(250); // longer than the demo's fake 150ms latency
+  await session.settle();
+
+  const afterRefetch = await treeRowTexts(session.panelPage, '#query-detail .tree-row');
+  assert.equal(
+    afterRefetch.length,
+    1,
+    'the root should still be collapsed after a same-identity live update, proving the tree was updated in place'
+  );
+});
+
 test('Reset returns the query to a fresh, refetched state', async () => {
   await session.panelPage.click('#query-detail button:has-text("Reset")');
   await session.panelPage.waitForTimeout(250);
