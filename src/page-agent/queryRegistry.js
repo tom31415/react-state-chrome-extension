@@ -183,28 +183,26 @@ export function createQueryRegistry(send, isActive) {
     return buildMutationDetail(id);
   }
 
-  function refetchQuery(id) {
+  function queryAction(id, methodName) {
     const q = findQuery(id);
     if (!q) throw new Error(`Unknown query ${id}`);
-    clientFor(id).refetchQueries({ queryKey: q.queryKey, exact: true });
+    clientFor(id)[methodName]({ queryKey: q.queryKey, exact: true });
+  }
+
+  function refetchQuery(id) {
+    queryAction(id, 'refetchQueries');
   }
 
   function invalidateQuery(id) {
-    const q = findQuery(id);
-    if (!q) throw new Error(`Unknown query ${id}`);
-    clientFor(id).invalidateQueries({ queryKey: q.queryKey, exact: true });
+    queryAction(id, 'invalidateQueries');
   }
 
   function resetQuery(id) {
-    const q = findQuery(id);
-    if (!q) throw new Error(`Unknown query ${id}`);
-    clientFor(id).resetQueries({ queryKey: q.queryKey, exact: true });
+    queryAction(id, 'resetQueries');
   }
 
   function removeQuery(id) {
-    const q = findQuery(id);
-    if (!q) throw new Error(`Unknown query ${id}`);
-    clientFor(id).removeQueries({ queryKey: q.queryKey, exact: true });
+    queryAction(id, 'removeQueries');
   }
 
   function removeMutation(id) {
