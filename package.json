@@ -7,7 +7,9 @@
   "scripts": {
     "build": "node build.mjs",
     "watch": "node build.mjs --watch",
-    "test": "node --test"
+    "test": "node --test",
+    "test:e2e": "npm run build --silent && node --test --test-concurrency=3 e2e/*.e2e.mjs",
+    "test:all": "npm test && npm run test:e2e"
   },
   "devDependencies": {
     "esbuild": "^0.25.0",

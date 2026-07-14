@@ -45,9 +45,32 @@ this extension falls back to scanning the DOM for React roots (fully supported; 
 ## Development
 
 ```bash
-npm run watch   # rebuild on change (reload the extension in chrome://extensions after)
-npm test        # unit tests (node --test)
+npm run watch    # rebuild on change (reload the extension in chrome://extensions after)
+npm test         # unit tests (node --test) — fast, no browser needed
+npm run test:e2e # regression suite against the REAL extension in a real (headless) Chromium
+npm run test:all # both
 ```
+
+### Testing
+
+`test/*.test.mjs` covers pure logic (serialization, path edits, fiber/legacy component
+reading, the Redux devtools shim, the store registry, tree search/formatting) with plain
+`node --test` + `node:assert` — no browser involved, runs in well under a second.
+
+`e2e/*.e2e.mjs` is the regression suite: it builds the extension, loads it into a real
+Chromium via `playwright-core` (`--load-extension`, not a mocked API), and drives the demo
+app (`demo/agent-test.html`) through the actual panel UI — clicking buttons, typing into
+search boxes, double-clicking to edit values — exactly as a person would. `e2e/harness.mjs`
+holds the shared setup (serving the repo, launching the extension, and the message-relay
+`pump`/`settle` helpers that stand in for the real content-script/service-worker routing,
+since the panel here is a plain page with `chrome.devtools`/`chrome.runtime` mocked rather
+than a real DevTools panel window). Each file gets its own browser session; `--test-concurrency`
+is capped in `test:e2e` because running many real Chromium instances fully in parallel
+causes resource-contention timeouts, not real failures.
+
+When fixing a bug or adding a feature, add a test in whichever suite matches where the
+behavior actually lives — pure logic in `test/`, anything that needs a real DOM/browser/
+extension in `e2e/`.
 
 Architecture (see `docs/specs/` for the full design):
 
