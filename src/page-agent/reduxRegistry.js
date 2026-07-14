@@ -31,7 +31,7 @@ export function isStoreLike(o) {
   );
 }
 
-function throttle(fn, ms) {
+export function throttle(fn, ms) {
   let timer = null;
   let last = 0;
   return () => {
