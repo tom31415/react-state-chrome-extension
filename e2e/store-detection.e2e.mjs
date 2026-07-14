@@ -33,7 +33,7 @@ test('hovering while picking shows a Chrome-inspector-style overlay label', asyn
   await appPage.waitForTimeout(150);
 
   const overlay = await appPage.evaluate(() => {
-    const el = document.querySelector('[data-rri-overlay]');
+    const el = document.querySelector('[data-rsi-overlay]');
     return el ? { visible: el.style.display !== 'none', label: el.textContent } : null;
   });
   assert.ok(overlay, 'overlay element exists');

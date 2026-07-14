@@ -22,7 +22,7 @@ async function clickMe() {
 test('no flash before the toggle is enabled', async () => {
   await clickMe();
   await session.appPage.waitForTimeout(80);
-  const count = await session.appPage.evaluate(() => document.querySelectorAll('[data-rri-overlay]').length);
+  const count = await session.appPage.evaluate(() => document.querySelectorAll('[data-rsi-overlay]').length);
   assert.equal(count, 0);
 });
 
@@ -36,13 +36,13 @@ test('enabling the toggle flashes re-rendered components on the page', async () 
 
   await clickMe();
   const overlays = await session.appPage.evaluate(() =>
-    [...document.querySelectorAll('[data-rri-overlay]')].map((el) => el.getBoundingClientRect().width > 0)
+    [...document.querySelectorAll('[data-rsi-overlay]')].map((el) => el.getBoundingClientRect().width > 0)
   );
   assert.ok(overlays.length > 0, 'at least one component flashed');
   assert.ok(overlays.every(Boolean), 'every flash box has real dimensions');
 
   await session.appPage.waitForTimeout(700); // past the fade + cleanup timeout
-  const afterFade = await session.appPage.evaluate(() => document.querySelectorAll('[data-rri-overlay]').length);
+  const afterFade = await session.appPage.evaluate(() => document.querySelectorAll('[data-rsi-overlay]').length);
   assert.equal(afterFade, 0, 'flash boxes remove themselves');
 });
 
@@ -51,6 +51,6 @@ test('disabling the toggle stops the flash', async () => {
   await session.settle();
   await clickMe();
   await session.appPage.waitForTimeout(80);
-  const count = await session.appPage.evaluate(() => document.querySelectorAll('[data-rri-overlay]').length);
+  const count = await session.appPage.evaluate(() => document.querySelectorAll('[data-rsi-overlay]').length);
   assert.equal(count, 0);
 });

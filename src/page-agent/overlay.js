@@ -7,7 +7,7 @@ let labelEl = null;
 function ensure() {
   if (container && container.isConnected) return container;
   container = document.createElement('div');
-  container.setAttribute('data-rri-overlay', '');
+  container.setAttribute('data-rsi-overlay', '');
   Object.assign(container.style, {
     position: 'fixed',
     zIndex: '2147483646',
@@ -67,7 +67,7 @@ export function flashUpdate(node) {
   const rect = node.getBoundingClientRect();
   if (rect.width === 0 && rect.height === 0) return;
   const box = document.createElement('div');
-  box.setAttribute('data-rri-overlay', '');
+  box.setAttribute('data-rsi-overlay', '');
   Object.assign(box.style, {
     position: 'fixed',
     zIndex: '2147483647',

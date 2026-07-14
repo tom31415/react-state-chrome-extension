@@ -52,7 +52,7 @@ let pendingScrollRestore = null; // { storeId, scrollTop } | null
 let port = null;
 
 function connect() {
-  port = chrome.runtime.connect({ name: 'rri-panel' });
+  port = chrome.runtime.connect({ name: 'rsi-panel' });
   port.postMessage({ type: 'panel-init', tabId: chrome.devtools.inspectedWindow.tabId });
   port.onMessage.addListener(onPortMessage);
   port.onDisconnect.addListener(() => {
@@ -499,7 +499,7 @@ function renderStores() {
     const empty = document.createElement('div');
     empty.className = 'empty';
     empty.textContent =
-      'No Redux stores found. If the app creates its store before scanning, hit Rescan. Apps can also call window.__REACT_REDUX_INSPECTOR__.register(store).';
+      'No Redux stores found. If the app creates its store before scanning, hit Rescan. Apps can also call window.__REACT_STATE_INSPECTOR__.register(store).';
     list.appendChild(empty);
   }
   for (const store of state.stores) {

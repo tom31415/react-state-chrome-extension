@@ -155,11 +155,11 @@ test('actions are recorded into a per-store history with incrementing seq', () =
   );
 });
 
-test('internal @@RRI actions (override, notify) are not recorded as history', () => {
+test('internal @@RSI actions (override, notify) are not recorded as history', () => {
   const registry = createStoreRegistry(() => {}, () => true);
   const store = makeStore({ n: 1 });
   const id = registry.register(store, { tier: 3 });
-  registry.edit(id, ['n'], 2); // ephemeral: dispatches @@RRI/NOTIFY via the REAL dispatch, bypassing our patch
+  registry.edit(id, ['n'], 2); // ephemeral: dispatches @@RSI/NOTIFY via the REAL dispatch, bypassing our patch
   store.dispatch({ type: 'increment' }); // a real action still gets recorded
   const { total } = registry.getHistory(id);
   assert.equal(total, 1);

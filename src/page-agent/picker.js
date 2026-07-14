@@ -27,7 +27,7 @@ export function createPicker({ onPick, onCancel }) {
 
   function onMove(e) {
     const t = e.target;
-    if (!(t instanceof Element) || t.hasAttribute('data-rri-overlay')) return;
+    if (!(t instanceof Element) || t.hasAttribute('data-rsi-overlay')) return;
     current = resolve(t);
     // Chrome-inspector-style label: element, dimensions, owning component.
     const rect = t.getBoundingClientRect();

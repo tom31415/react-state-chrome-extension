@@ -15,20 +15,20 @@ let invalidated = false; // extension was reloaded/removed; context is dead
 function connectPort(announce) {
   if (invalidated || port) return port;
   try {
-    port = chrome.runtime.connect({ name: 'rri-content' });
+    port = chrome.runtime.connect({ name: 'rsi-content' });
   } catch {
     invalidated = true;
     return null;
   }
   port.onMessage.addListener((msg) => {
-    window.postMessage({ __rri: 'to-agent', msg }, '*');
+    window.postMessage({ __rsi: 'to-agent', msg }, '*');
   });
   port.onDisconnect.addListener(() => {
     void chrome.runtime.lastError; // read to silence "Unchecked runtime.lastError"
     port = null;
     // Assume no panel until one re-inits — stops the agent serializing state
     // on every dispatch for nobody.
-    window.postMessage({ __rri: 'to-agent', msg: { type: 'panel-disconnected' } }, '*');
+    window.postMessage({ __rsi: 'to-agent', msg: { type: 'panel-disconnected' } }, '*');
     setTimeout(() => connectPort(true), 200);
   });
   if (announce) {
@@ -43,7 +43,7 @@ function connectPort(announce) {
 }
 
 window.addEventListener('message', (event) => {
-  if (event.source !== window || !event.data || event.data.__rri !== 'to-panel') return;
+  if (event.source !== window || !event.data || event.data.__rsi !== 'to-panel') return;
   const p = connectPort(false);
   if (!p) return;
   try {

@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "React + Redux Inspector",
+  "name": "React + State Inspector",
   "version": "0.1.0",
-  "description": "Inspect React (v15+) components visually and view/edit Redux store state live from a DevTools panel.",
+  "description": "Inspect React (v15+) components visually and view/edit Redux and React Query state live from a DevTools panel.",
   "minimum_chrome_version": "111",
   "devtools_page": "devtools.html",
   "background": {

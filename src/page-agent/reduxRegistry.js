@@ -17,7 +17,7 @@ import { serialize } from '../shared/serialize.js';
 import { setIn } from '../shared/paths.js';
 import { OVERRIDE_ACTION } from './reduxShim.js';
 
-const NOTIFY_ACTION = '@@RRI/NOTIFY';
+const NOTIFY_ACTION = '@@RSI/NOTIFY';
 const UNSET = Symbol('unset');
 const MAX_HISTORY = 50;
 
@@ -113,7 +113,7 @@ export function createStoreRegistry(send, isActive) {
     store.dispatch = (action) => {
       const result = entry.realDispatch(action);
       const type = action && action.type;
-      const isInternal = typeof type === 'string' && type.startsWith('@@RRI');
+      const isInternal = typeof type === 'string' && type.startsWith('@@RSI');
       if (!isInternal) {
         entry.override = UNSET;
         recordAction(entry, action);

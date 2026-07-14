@@ -66,7 +66,7 @@ export async function launch({ distPath = join(REPO_ROOT, 'dist'), demoPath = '/
   await appPage.evaluate(() => {
     window.__outbox = [];
     window.addEventListener('message', (e) => {
-      if (e.source === window && e.data && e.data.__rri === 'to-panel') window.__outbox.push(e.data.msg);
+      if (e.source === window && e.data && e.data.__rsi === 'to-panel') window.__outbox.push(e.data.msg);
     });
   });
 
@@ -113,7 +113,7 @@ export async function launch({ distPath = join(REPO_ROOT, 'dist'), demoPath = '/
       return out;
     });
     for (const msg of toAgent) {
-      await appPage.evaluate((m) => window.postMessage({ __rri: 'to-agent', msg: m }, '*'), msg);
+      await appPage.evaluate((m) => window.postMessage({ __rsi: 'to-agent', msg: m }, '*'), msg);
     }
   }
 

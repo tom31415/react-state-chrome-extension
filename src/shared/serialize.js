@@ -1,9 +1,9 @@
 // JSON-safe serialization of arbitrary page values for transport to the panel.
-// Non-JSON values become "tagged" nodes: plain objects whose `@rri` key holds a
+// Non-JSON values become "tagged" nodes: plain objects whose `@rsi` key holds a
 // string kind. Raw arrays/objects pass through as JSON containers; a plain object
-// that itself contains an `@rri` key is escaped inside an `obj` wrapper.
+// that itself contains an `@rsi` key is escaped inside an `obj` wrapper.
 
-export const TAG = '@rri';
+export const TAG = '@rsi';
 
 export const MAX_STRING = 5000;
 export const MAX_KEYS = 100;

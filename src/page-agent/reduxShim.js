@@ -8,7 +8,7 @@
 // properties: if Redux DevTools assigns over us later, the setter captures its
 // implementation and we chain to it — both tools keep working.
 
-export const OVERRIDE_ACTION = '@@RRI/OVERRIDE_STATE';
+export const OVERRIDE_ACTION = '@@RSI/OVERRIDE_STATE';
 
 export function wrapReducer(reducer) {
   return (state, action) =>

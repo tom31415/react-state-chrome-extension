@@ -23,15 +23,15 @@ import { getIn, setIn } from '../shared/paths.js';
 import { showHighlight, hideHighlight, flashUpdate } from './overlay.js';
 
 (function main() {
-  if (window.__RRI_AGENT__) return;
-  window.__RRI_AGENT__ = true;
+  if (window.__RSI_AGENT__) return;
+  window.__RSI_AGENT__ = true;
 
   let active = false; // a devtools panel is connected
   let lastRoots = [];
 
   function send(msg) {
     try {
-      window.postMessage({ __rri: 'to-panel', msg }, '*');
+      window.postMessage({ __rsi: 'to-panel', msg }, '*');
     } catch {
       // unserializable payloads should never happen (everything is pre-serialized)
     }
@@ -75,7 +75,7 @@ import { showHighlight, hideHighlight, flashUpdate } from './overlay.js';
   installReduxShim((store) => registry.register(store, { tier: 1 }));
 
   // Public API for apps that want guaranteed registration.
-  window.__REACT_REDUX_INSPECTOR__ = {
+  window.__REACT_STATE_INSPECTOR__ = {
     register: (store, label) => registry.register(store, { tier: 2, label }),
   };
 
@@ -384,7 +384,7 @@ import { showHighlight, hideHighlight, flashUpdate } from './overlay.js';
   };
 
   window.addEventListener('message', (event) => {
-    if (event.source !== window || !event.data || event.data.__rri !== 'to-agent') return;
+    if (event.source !== window || !event.data || event.data.__rsi !== 'to-agent') return;
     const msg = event.data.msg || {};
     const handler = handlers[msg.type];
     if (!handler) return;

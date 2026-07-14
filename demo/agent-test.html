@@ -16,11 +16,11 @@
       // console) can assert on it: window.__collected
       window.__collected = [];
       window.addEventListener('message', (e) => {
-        if (e.source === window && e.data && e.data.__rri === 'to-panel') {
+        if (e.source === window && e.data && e.data.__rsi === 'to-panel') {
           window.__collected.push(e.data.msg);
         }
       });
-      window.__toAgent = (msg) => window.postMessage({ __rri: 'to-agent', msg }, '*');
+      window.__toAgent = (msg) => window.postMessage({ __rsi: 'to-agent', msg }, '*');
     </script>
   </head>
   <body>

@@ -5,7 +5,7 @@ const contentPorts = new Map(); // tabId -> port
 const panelPorts = new Map(); // tabId -> Set<port>
 
 chrome.runtime.onConnect.addListener((port) => {
-  if (port.name === 'rri-content') {
+  if (port.name === 'rsi-content') {
     const tabId = port.sender && port.sender.tab && port.sender.tab.id;
     if (tabId == null) return;
     contentPorts.set(tabId, port);
@@ -20,7 +20,7 @@ chrome.runtime.onConnect.addListener((port) => {
       void chrome.runtime.lastError;
       if (contentPorts.get(tabId) === port) contentPorts.delete(tabId);
     });
-  } else if (port.name === 'rri-panel') {
+  } else if (port.name === 'rsi-panel') {
     let tabId = null;
     port.onMessage.addListener((msg) => {
       if (msg && msg.type === 'panel-init') {
@@ -35,7 +35,7 @@ chrome.runtime.onConnect.addListener((port) => {
       else port.postMessage({ type: 'error', message: 'Page is not reachable — reload the tab.' });
     });
     port.onDisconnect.addListener(() => {
-      void chrome.runtime.lastError; // see comment on the 'rri-content' listener above
+      void chrome.runtime.lastError; // see comment on the 'rsi-content' listener above
       if (tabId == null) return;
       const panels = panelPorts.get(tabId);
       if (panels) {

@@ -1,7 +1,7 @@
-# React + Redux Inspector
+# React + State Inspector
 
 A Chrome DevTools extension (Manifest V3) for debugging React applications — **React 15
-and newer** — with first-class Redux support:
+and newer** — with first-class Redux and React Query support:
 
 - **Detects React** on the page and reports the version(s), whether the app uses fibers
   (React 16+) or legacy internal instances (React 15).
@@ -26,7 +26,7 @@ npm run build
 
 Then in Chrome: `chrome://extensions` → enable **Developer mode** → **Load unpacked** →
 select the `dist/` directory. Open DevTools on any React page and switch to the
-**React+Redux** panel.
+**React+State** panel.
 
 `demo/index.html` is a ready-made playground (React 18 + Redux + react-redux via CDN)
 with a class component, a hooks component, and two stores.
@@ -36,7 +36,7 @@ with a class component, a hooks component, and two stores.
 | Tier | How the store is found | Edit behavior |
 |------|------------------------|---------------|
 | **1 — enhancer** | The extension shims `window.__REDUX_DEVTOOLS_EXTENSION__` / `__REDUX_DEVTOOLS_EXTENSION_COMPOSE__` before the app runs. Any store created through them (which includes Redux Toolkit's `configureStore` with devtools enabled, the default) is registered with its reducer wrapped. | **Persistent** — edits become the store's real state; subsequent actions reduce from the edited state. |
-| **2 — explicit** | The app calls `window.__REACT_REDUX_INSPECTOR__.register(store, 'label')`. | Ephemeral (see below). |
+| **2 — explicit** | The app calls `window.__REACT_STATE_INSPECTOR__.register(store, 'label')`. | Ephemeral (see below). |
 | **3 — discovered** | The extension walks the React tree looking for react-redux `Provider`s (`props.store` or context `value.store`) and checks common globals like `window.store`. | **Ephemeral** — `getState` is patched to return the edited state and subscribers re-render, but the next real dispatched action recomputes state from the store's own reducer and the edit is discarded. The panel labels these stores "ephemeral edit". |
 
 If the real Redux DevTools extension is installed, the shim chains to it — both tools work.
