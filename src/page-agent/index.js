@@ -5,7 +5,8 @@
 import { installReactHook, getRendererVersions } from './reactHook.js';
 import { installReduxShim } from './reduxShim.js';
 import { createStoreRegistry } from './reduxRegistry.js';
-import { discoverStores, collectRoots } from './discovery.js';
+import { createQueryRegistry } from './queryRegistry.js';
+import { discoverStores, discoverQueryClients, collectRoots } from './discovery.js';
 import { createPicker } from './picker.js';
 import {
   describeComponent,
@@ -70,6 +71,7 @@ import { showHighlight, hideHighlight, flashUpdate } from './overlay.js';
     if (highlightUpdatesEnabled) flashUpdatedComponents(root);
   });
   const registry = createStoreRegistry(send, () => active);
+  const queryRegistry = createQueryRegistry(send, () => active);
   installReduxShim((store) => registry.register(store, { tier: 1 }));
 
   // Public API for apps that want guaranteed registration.
@@ -192,6 +194,7 @@ import { showHighlight, hideHighlight, flashUpdate } from './overlay.js';
 
   function scan() {
     lastRoots = discoverStores(registry, hookState);
+    discoverQueryClients(queryRegistry, hookState);
   }
 
   function sendEnvironment() {
@@ -215,7 +218,17 @@ import { showHighlight, hideHighlight, flashUpdate } from './overlay.js';
     sendEnvironment();
     send({ type: 'stores', stores: registry.list() });
     registry.pushAll();
+    queryRegistry.pushAll();
     if (wantsComponentTree) sendComponentTree();
+  }
+
+  function ackQueryAction(action, fn) {
+    try {
+      fn();
+      send({ type: 'query-action-result', action, ok: true });
+    } catch (err) {
+      send({ type: 'query-action-result', action, ok: false, error: String((err && err.message) || err) });
+    }
   }
 
   const handlers = {
@@ -335,6 +348,38 @@ import { showHighlight, hideHighlight, flashUpdate } from './overlay.js';
     },
     'set-highlight-updates'(msg) {
       highlightUpdatesEnabled = !!msg.enabled;
+    },
+    'get-query-detail'(msg) {
+      const detail = queryRegistry.getQueryDetail(msg.id);
+      send(detail ? { type: 'query-detail', ...detail } : { type: 'query-detail', id: msg.id, gone: true });
+    },
+    'get-mutation-detail'(msg) {
+      const detail = queryRegistry.getMutationDetail(msg.id);
+      send(detail ? { type: 'mutation-detail', ...detail } : { type: 'mutation-detail', id: msg.id, gone: true });
+    },
+    'refetch-query'(msg) {
+      ackQueryAction('refetch', () => queryRegistry.refetchQuery(msg.id));
+    },
+    'invalidate-query'(msg) {
+      ackQueryAction('invalidate', () => queryRegistry.invalidateQuery(msg.id));
+    },
+    'reset-query'(msg) {
+      ackQueryAction('reset', () => queryRegistry.resetQuery(msg.id));
+    },
+    'remove-query'(msg) {
+      ackQueryAction('remove', () => queryRegistry.removeQuery(msg.id));
+    },
+    'remove-mutation'(msg) {
+      ackQueryAction('remove-mutation', () => queryRegistry.removeMutation(msg.id));
+    },
+    'edit-query-data'(msg) {
+      try {
+        const value = JSON.parse(msg.json);
+        queryRegistry.editQueryData(msg.id, msg.path, value);
+        send({ type: 'query-edit-result', id: msg.id, ok: true });
+      } catch (err) {
+        send({ type: 'query-edit-result', id: msg.id, ok: false, error: String((err && err.message) || err) });
+      }
     },
   };
 

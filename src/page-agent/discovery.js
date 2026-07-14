@@ -9,6 +9,7 @@ import {
   getDisplayName,
 } from './fibers.js';
 import { isStoreLike } from './reduxRegistry.js';
+import { isQueryClientLike } from './queryRegistry.js';
 
 const WINDOW_STORE_NAMES = ['store', 'reduxStore', 'appStore', '__store__', '_store'];
 
@@ -78,4 +79,42 @@ function checkCandidates(registry, props, componentName) {
   if (value && typeof value === 'object' && isStoreLike(value.store)) {
     registry.register(value.store, { tier: 3, label: 'react-redux context store' });
   }
+}
+
+const WINDOW_QUERY_CLIENT_NAMES = ['queryClient', 'reactQueryClient'];
+
+// Finds QueryClient instances the same way discoverStores finds Redux
+// stores: QueryClientProvider's `client` prop (react-query has no
+// enhancer-style interception point to shim ahead of time, so this and a
+// window-global fallback are the only two entry points there are).
+export function discoverQueryClients(registry, hookState) {
+  const roots = collectRoots(hookState);
+
+  for (const root of roots) {
+    if (root.kind === 'fiber') {
+      walkFiberTree(root.ref, (fiber) => {
+        checkQueryClientCandidate(registry, fiber.memoizedProps);
+      });
+    } else {
+      walkLegacyTree(root.ref, (inst) => {
+        const el = inst._currentElement;
+        if (el && typeof el.type === 'function') checkQueryClientCandidate(registry, el.props);
+      });
+    }
+  }
+
+  for (const name of WINDOW_QUERY_CLIENT_NAMES) {
+    let candidate;
+    try {
+      candidate = window[name];
+    } catch {
+      continue;
+    }
+    if (isQueryClientLike(candidate)) registry.register(candidate, `window.${name}`);
+  }
+}
+
+function checkQueryClientCandidate(registry, props) {
+  if (!props || typeof props !== 'object') return;
+  if (isQueryClientLike(props.client)) registry.register(props.client, 'QueryClientProvider');
 }
