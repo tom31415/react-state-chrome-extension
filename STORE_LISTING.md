@@ -67,7 +67,7 @@ Check the corresponding boxes in the "Data usage" / "Privacy practices" tabs:
 
   Up to 2 more can be added; see `store-assets/README.md`.
 - **Large promo tile (920×680, optional):** *(not provided)*
-- **Marquee promo tile (1400×560, optional):** *(not provided)*
+- **Marquee promo tile (1400×560, optional):** `store-assets/marquee-tile-1400x560.png`
 
 ## Version numbering
 

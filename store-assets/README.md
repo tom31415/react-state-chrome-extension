@@ -2,7 +2,8 @@
 
 ## Files here
 
-- `promo-tile-440x280.png` — small promo tile (required by CWS for publishing). Icon + name + tagline on the brand-navy background.
+- `promo-tile-440x280.png` — small promo tile (required by CWS for publishing). 24-bit PNG (no alpha). Icon + name + tagline on the brand-navy background.
+- `marquee-tile-1400x560.png` — marquee promo tile (optional CWS asset, shown on featured collections). 24-bit PNG (no alpha), same design as the small tile scaled up for the wider aspect ratio.
 - `screenshot-1-stores-1280x800.png` — Stores tab: the signal-room Redux Provider store with its live state tree (counter + tasks array) expanded and editable.
 - `screenshot-2-component-1280x800.png` — Component tab: the signal-room component tree with `<QueryPanel>` selected, showing its fiber kind, props, and hooks list.
 - `screenshot-3-queries-1280x800.png` — Queries tab: the `["systemStats"]` React Query with status/actions and an editable data tree.
