@@ -60,7 +60,12 @@ Check the corresponding boxes in the "Data usage" / "Privacy practices" tabs:
 
 - **Icon (128×128):** `icons/icon128.png` — Chrome Web Store pulls this from the manifest automatically.
 - **Small promo tile (440×280, required):** `store-assets/promo-tile-440x280.png`
-- **Screenshot (1280×800):** `store-assets/screenshot-1280x800.png` — Stores tab in action against the `demo/signal-room/` sample page. Up to 4 more screenshots can be added; see `store-assets/README.md` for suggestions.
+- **Screenshots (1280×800):**
+  - `store-assets/screenshot-1-stores-1280x800.png` — Stores tab
+  - `store-assets/screenshot-2-component-1280x800.png` — Component tab
+  - `store-assets/screenshot-3-queries-1280x800.png` — Queries tab
+
+  Up to 2 more can be added; see `store-assets/README.md`.
 - **Large promo tile (920×680, optional):** *(not provided)*
 - **Marquee promo tile (1400×560, optional):** *(not provided)*
 
