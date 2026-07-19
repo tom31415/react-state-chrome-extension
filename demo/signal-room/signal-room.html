@@ -1,0 +1,983 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Signal Room — State Inspector Playground</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+  :root{
+    --bg-void:#0b0e14;
+    --panel:#12161f;
+    --panel-alt:#161b26;
+    --hairline:#232838;
+    --hairline-soft:#1a2030;
+    --text-primary:#e7eaf2;
+    --text-dim:#7c879b;
+    --text-faint:#4b5468;
+    --accent-redux:#9c7fff;
+    --accent-context:#34d0c6;
+    --accent-query:#ff5d7a;
+    --accent-state:#f5b942;
+    --radius:10px;
+  }
+
+  *{ box-sizing:border-box; }
+
+  html,body{
+    margin:0;
+    padding:0;
+    background:var(--bg-void);
+    color:var(--text-primary);
+    font-family:'Inter', sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  body{
+    background-image:
+      repeating-linear-gradient(0deg, rgba(255,255,255,0.015) 0px, rgba(255,255,255,0.015) 1px, transparent 1px, transparent 40px),
+      repeating-linear-gradient(90deg, rgba(255,255,255,0.015) 0px, rgba(255,255,255,0.015) 1px, transparent 1px, transparent 40px);
+  }
+
+  .mono{ font-family:'IBM Plex Mono', monospace; }
+  .display{ font-family:'Space Grotesk', sans-serif; }
+
+  #root{ min-height:100vh; }
+
+  .shell{
+    max-width:1180px;
+    margin:0 auto;
+    padding:2.5rem 1.5rem 4rem;
+  }
+
+  /* header */
+  .topbar{
+    display:flex;
+    align-items:flex-end;
+    justify-content:space-between;
+    gap:1.5rem;
+    flex-wrap:wrap;
+    padding-bottom:1.5rem;
+    border-bottom:1px solid var(--hairline);
+    margin-bottom:1.5rem;
+  }
+
+  .eyebrow{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.72rem;
+    letter-spacing:0.18em;
+    text-transform:uppercase;
+    color:var(--text-dim);
+    margin:0 0 0.4rem;
+  }
+
+  .title{
+    font-family:'Space Grotesk', sans-serif;
+    font-size:2.1rem;
+    font-weight:700;
+    margin:0;
+    letter-spacing:-0.01em;
+  }
+
+  .subtitle{
+    color:var(--text-dim);
+    font-size:0.92rem;
+    max-width:44ch;
+    margin-top:0.5rem;
+    line-height:1.5;
+  }
+
+  .live-badge{
+    display:flex;
+    align-items:center;
+    gap:0.5rem;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.75rem;
+    letter-spacing:0.1em;
+    color:var(--text-dim);
+    padding:0.45rem 0.8rem;
+    border:1px solid var(--hairline);
+    border-radius:999px;
+    background:var(--panel);
+  }
+
+  .live-dot{
+    width:8px; height:8px; border-radius:50%;
+    background:#3ddc84;
+    box-shadow:0 0 0 0 rgba(61,220,132,0.6);
+    animation:pulse 1.8s infinite;
+  }
+
+  @keyframes pulse{
+    0%{ box-shadow:0 0 0 0 rgba(61,220,132,0.55); }
+    70%{ box-shadow:0 0 0 8px rgba(61,220,132,0); }
+    100%{ box-shadow:0 0 0 0 rgba(61,220,132,0); }
+  }
+
+  /* ticker */
+  .ticker{
+    background:var(--panel);
+    border:1px solid var(--hairline);
+    border-radius:var(--radius);
+    margin-bottom:1.75rem;
+    overflow:hidden;
+  }
+
+  .ticker-head{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:0.7rem 1rem;
+    border-bottom:1px solid var(--hairline-soft);
+  }
+
+  .ticker-head span{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.7rem;
+    letter-spacing:0.14em;
+    text-transform:uppercase;
+    color:var(--text-dim);
+  }
+
+  .ticker-body{
+    max-height:210px;
+    overflow-y:auto;
+    padding:0.35rem 0;
+  }
+
+  .ticker-row{
+    display:flex;
+    align-items:baseline;
+    gap:0.75rem;
+    padding:0.4rem 1rem;
+    border-left:3px solid transparent;
+    animation:slideIn 0.35s ease;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.8rem;
+  }
+
+  @keyframes slideIn{
+    from{ opacity:0; transform:translateY(-6px); }
+    to{ opacity:1; transform:translateY(0); }
+  }
+
+  .ticker-row .t{ color:var(--text-faint); flex-shrink:0; }
+  .ticker-row .tag{ flex-shrink:0; font-weight:600; }
+  .ticker-row .msg{ color:var(--text-dim); }
+
+  .ticker-empty{
+    padding:1rem;
+    color:var(--text-faint);
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.8rem;
+  }
+
+  /* grid of modules */
+  .grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:1.25rem;
+  }
+
+  @media (max-width:860px){
+    .grid{ grid-template-columns:1fr; }
+  }
+
+  .panel{
+    --accent:#888;
+    position:relative;
+    background:var(--panel);
+    border:1px solid var(--hairline);
+    border-radius:var(--radius);
+    padding:1.4rem 1.4rem 1.6rem;
+    opacity:0;
+    transform:translateY(10px);
+    animation:rise 0.5s ease forwards;
+  }
+
+  .panel::before, .panel::after{
+    content:"";
+    position:absolute;
+    width:16px; height:16px;
+    border:2px solid var(--accent);
+    opacity:0.55;
+  }
+  .panel::before{ top:-1px; left:-1px; border-right:none; border-bottom:none; border-top-left-radius:6px; }
+  .panel::after{ bottom:-1px; right:-1px; border-left:none; border-top:none; border-bottom-right-radius:6px; }
+
+  @keyframes rise{ to{ opacity:1; transform:translateY(0); } }
+
+  .panel-redux{ --accent:var(--accent-redux); animation-delay:0.02s; }
+  .panel-context{ --accent:var(--accent-context); animation-delay:0.10s; }
+  .panel-query{ --accent:var(--accent-query); animation-delay:0.18s; }
+  .panel-state{ --accent:var(--accent-state); animation-delay:0.26s; }
+
+  .panel-head{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin-bottom:1.1rem;
+  }
+
+  .tag-chip{
+    display:inline-flex;
+    align-items:center;
+    gap:0.4rem;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.7rem;
+    letter-spacing:0.12em;
+    font-weight:600;
+    color:var(--accent);
+    background:color-mix(in srgb, var(--accent) 14%, transparent);
+    padding:0.3rem 0.6rem;
+    border-radius:6px;
+  }
+
+  .panel-title{
+    font-family:'Space Grotesk', sans-serif;
+    font-size:1.05rem;
+    font-weight:600;
+    margin:0.55rem 0 0.2rem;
+  }
+
+  .panel-desc{
+    color:var(--text-dim);
+    font-size:0.82rem;
+    line-height:1.5;
+    margin:0 0 1.1rem;
+  }
+
+  .status-dot{
+    width:6px; height:6px; border-radius:50%;
+    background:var(--text-faint);
+  }
+  .status-dot.busy{ background:var(--accent); animation:pulse2 1s infinite; }
+  @keyframes pulse2{ 0%,100%{ opacity:1; } 50%{ opacity:0.35; } }
+
+  /* controls */
+  .row{ display:flex; align-items:center; gap:0.6rem; flex-wrap:wrap; }
+  .row + .row{ margin-top:0.85rem; }
+
+  button{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.78rem;
+    letter-spacing:0.02em;
+    color:var(--text-primary);
+    background:var(--panel-alt);
+    border:1px solid var(--hairline);
+    border-radius:7px;
+    padding:0.5rem 0.8rem;
+    cursor:pointer;
+    transition:border-color 0.15s ease, transform 0.1s ease;
+  }
+  button:hover{ border-color:var(--accent, var(--text-dim)); }
+  button:active{ transform:translateY(1px); }
+  button:focus-visible, input:focus-visible, select:focus-visible{
+    outline:2px solid var(--accent, #7c879b);
+    outline-offset:2px;
+  }
+  button.primary{
+    background:color-mix(in srgb, var(--accent) 18%, var(--panel-alt));
+    border-color:var(--accent);
+    color:var(--text-primary);
+  }
+  button:disabled{ opacity:0.5; cursor:not-allowed; }
+
+  input[type="text"], select{
+    font-family:'Inter', sans-serif;
+    font-size:0.84rem;
+    color:var(--text-primary);
+    background:var(--panel-alt);
+    border:1px solid var(--hairline);
+    border-radius:7px;
+    padding:0.5rem 0.7rem;
+  }
+
+  .counter-value{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:2.1rem;
+    font-weight:600;
+    min-width:2.4ch;
+    text-align:center;
+  }
+
+  .task-list{ list-style:none; margin:0.9rem 0 0; padding:0; display:flex; flex-direction:column; gap:0.4rem; }
+  .task-item{
+    display:flex; align-items:center; gap:0.6rem;
+    font-size:0.85rem;
+    padding:0.4rem 0.55rem;
+    background:var(--panel-alt);
+    border-radius:6px;
+    border:1px solid var(--hairline-soft);
+  }
+  .task-item.done .task-text{ color:var(--text-faint); text-decoration:line-through; }
+  .task-text{ flex:1; }
+  .task-remove{ padding:0.15rem 0.5rem; font-size:0.7rem; }
+
+  .field-label{
+    display:block;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.68rem;
+    letter-spacing:0.1em;
+    text-transform:uppercase;
+    color:var(--text-faint);
+    margin-bottom:0.3rem;
+  }
+
+  .readout{
+    margin-top:1rem;
+    padding:0.7rem 0.85rem;
+    background:var(--panel-alt);
+    border:1px solid var(--hairline-soft);
+    border-radius:7px;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.78rem;
+    color:var(--text-dim);
+    line-height:1.7;
+  }
+  .readout b{ color:var(--text-primary); font-weight:600; }
+
+  .stat-grid{
+    display:grid;
+    grid-template-columns:repeat(3, 1fr);
+    gap:0.6rem;
+    margin-bottom:0.9rem;
+  }
+  .stat-box{
+    background:var(--panel-alt);
+    border:1px solid var(--hairline-soft);
+    border-radius:7px;
+    padding:0.6rem 0.7rem;
+  }
+  .stat-box .stat-label{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.65rem;
+    letter-spacing:0.08em;
+    color:var(--text-faint);
+    text-transform:uppercase;
+  }
+  .stat-box .stat-value{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:1.25rem;
+    font-weight:600;
+    margin-top:0.15rem;
+  }
+
+  .switch{
+    position:relative;
+    width:38px; height:20px;
+    border-radius:999px;
+    background:var(--panel-alt);
+    border:1px solid var(--hairline);
+    cursor:pointer;
+    flex-shrink:0;
+  }
+  .switch .knob{
+    position:absolute;
+    top:2px; left:2px;
+    width:14px; height:14px;
+    border-radius:50%;
+    background:var(--text-dim);
+    transition:transform 0.18s ease, background 0.18s ease;
+  }
+  .switch.on{ border-color:var(--accent); }
+  .switch.on .knob{ transform:translateX(18px); background:var(--accent); }
+
+  .alerts-head{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin:1.1rem 0 0.5rem;
+  }
+  .alerts-head .field-label{ margin:0; }
+  .unread-badge{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.68rem;
+    color:var(--bg-void);
+    background:var(--accent-context);
+    padding:0.1rem 0.45rem;
+    border-radius:999px;
+    font-weight:600;
+  }
+  .alert-list{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:0.35rem; }
+  .alert-item{
+    display:flex;
+    align-items:flex-start;
+    gap:0.5rem;
+    padding:0.45rem 0.55rem;
+    background:var(--panel-alt);
+    border:1px solid var(--hairline-soft);
+    border-radius:6px;
+    font-size:0.78rem;
+    cursor:pointer;
+    transition:opacity 0.15s ease;
+  }
+  .alert-item.read{ opacity:0.5; }
+  .alert-dot{
+    width:7px; height:7px; border-radius:50%;
+    margin-top:0.35rem;
+    flex-shrink:0;
+  }
+  .alert-dot.warning{ background:#f5b942; }
+  .alert-dot.info{ background:#34d0c6; }
+  .alert-dot.success{ background:#3ddc84; }
+  .alert-dot.error{ background:#ff5d7a; }
+  .alert-text{ flex:1; color:var(--text-dim); line-height:1.4; }
+  .alert-item.read .alert-text{ text-decoration:line-through; }
+  .alert-time{ color:var(--text-faint); font-family:'IBM Plex Mono', monospace; font-size:0.68rem; flex-shrink:0; }
+
+  .footer-note{
+    margin-top:2.2rem;
+    padding-top:1.2rem;
+    border-top:1px solid var(--hairline);
+    color:var(--text-faint);
+    font-size:0.78rem;
+    line-height:1.7;
+  }
+  .footer-note code{
+    font-family:'IBM Plex Mono', monospace;
+    background:var(--panel-alt);
+    padding:0.1rem 0.4rem;
+    border-radius:4px;
+    color:var(--text-dim);
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    .panel{ animation:none; opacity:1; transform:none; }
+    .live-dot{ animation:none; }
+    .ticker-row{ animation:none; }
+    .status-dot.busy{ animation:none; }
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<!-- React -->
+<script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+<!-- Redux + React-Redux -->
+<script src="https://unpkg.com/redux@4.2.1/dist/redux.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-redux@8.1.3/dist/react-redux.min.js" crossorigin></script>
+<!-- React Query -->
+<script src="https://unpkg.com/@tanstack/react-query@4.36.1/build/umd/index.production.js" crossorigin></script>
+<!-- Babel (JSX in the browser, demo-only) -->
+<script src="https://unpkg.com/@babel/standalone/babel.min.js" crossorigin></script>
+
+<script type="text/jsx-source" id="app-source">
+const { useState, useContext, useCallback, useEffect, useRef, createContext } = React;
+const { createStore } = Redux;
+const { Provider, useSelector, useDispatch } = ReactRedux;
+const { QueryClient, QueryClientProvider, useQuery, useMutation, useQueryClient } = ReactQuery;
+
+const delay = (ms) => new Promise((res) => setTimeout(res, ms));
+
+/* ---------------------------------------------------------
+   REDUX: a small store with a counter and a task queue
+--------------------------------------------------------- */
+const initialReduxState = {
+  counter: 0,
+  tasks: [
+    { id: 1, text: "Calibrate sensors", done: false },
+    { id: 2, text: "Flush query cache", done: true },
+  ],
+};
+
+function reducer(state = initialReduxState, action) {
+  switch (action.type) {
+    case "COUNTER_INCREMENT":
+      return { ...state, counter: state.counter + 1 };
+    case "COUNTER_DECREMENT":
+      return { ...state, counter: state.counter - 1 };
+    case "COUNTER_RESET":
+      return { ...state, counter: 0 };
+    case "TASK_ADD":
+      return { ...state, tasks: [...state.tasks, { id: Date.now(), text: action.text, done: false }] };
+    case "TASK_TOGGLE":
+      return { ...state, tasks: state.tasks.map(t => t.id === action.id ? { ...t, done: !t.done } : t) };
+    case "TASK_REMOVE":
+      return { ...state, tasks: state.tasks.filter(t => t.id !== action.id) };
+    default:
+      return state;
+  }
+}
+
+const devtools = window.__REDUX_DEVTOOLS_EXTENSION__ ? window.__REDUX_DEVTOOLS_EXTENSION__() : undefined;
+const store = createStore(reducer, devtools);
+window.__DEMO_STORE__ = store; // exposed for convenience while debugging
+
+/* ---------------------------------------------------------
+   CONTEXT API: three nested providers
+--------------------------------------------------------- */
+const LogContext = createContext(null);
+function LogProvider({ children }) {
+  const [entries, setEntries] = useState([]);
+  const logEvent = useCallback((source, message) => {
+    setEntries(prev => {
+      const entry = { id: Date.now() + Math.random(), time: new Date(), source, message };
+      return [entry, ...prev].slice(0, 14);
+    });
+  }, []);
+  return <LogContext.Provider value={{ entries, logEvent }}>{children}</LogContext.Provider>;
+}
+const useLog = () => useContext(LogContext);
+
+const OperatorContext = createContext(null);
+function OperatorProvider({ children }) {
+  const [name, setName] = useState("J. Vance");
+  const [role, setRole] = useState("Engineer");
+  return (
+    <OperatorContext.Provider value={{ name, setName, role, setRole }}>
+      {children}
+    </OperatorContext.Provider>
+  );
+}
+const useOperator = () => useContext(OperatorContext);
+
+const DisplayContext = createContext(null);
+function DisplayProvider({ children }) {
+  const [compact, setCompact] = useState(false);
+  const toggleCompact = useCallback(() => setCompact(c => !c), []);
+  return (
+    <DisplayContext.Provider value={{ compact, toggleCompact }}>
+      {children}
+    </DisplayContext.Provider>
+  );
+}
+const useDisplay = () => useContext(DisplayContext);
+
+// Seeded sample context — realistic pre-populated data, not just editable fields,
+// so a debugger has non-trivial context values to inspect on first load.
+const NotificationsContext = createContext(null);
+const SAMPLE_NOTIFICATIONS = [
+  { id: 1, type: "warning", text: "Query cache exceeded 40 entries", time: "8m ago", read: false },
+  { id: 2, type: "info", text: "Context provider tree depth reached 4", time: "22m ago", read: true },
+  { id: 3, type: "success", text: "Redux DevTools connected", time: "1h ago", read: false },
+  { id: 4, type: "error", text: "Mutation retried once after failure", time: "2h ago", read: false },
+];
+function NotificationsProvider({ children }) {
+  const [notifications, setNotifications] = useState(SAMPLE_NOTIFICATIONS);
+  const markRead = useCallback((id) => {
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+  }, []);
+  const unreadCount = notifications.filter(n => !n.read).length;
+  return (
+    <NotificationsContext.Provider value={{ notifications, markRead, unreadCount }}>
+      {children}
+    </NotificationsContext.Provider>
+  );
+}
+const useNotifications = () => useContext(NotificationsContext);
+
+/* ---------------------------------------------------------
+   REACT QUERY: a polling query + a mutation
+--------------------------------------------------------- */
+const queryClient = new QueryClient();
+window.__DEMO_QUERY_CLIENT__ = queryClient;
+
+async function fetchSystemStats() {
+  await delay(500 + Math.random() * 500);
+  return {
+    cpu: Math.round(20 + Math.random() * 60),
+    mem: Math.round(30 + Math.random() * 50),
+    latency: Math.round(10 + Math.random() * 90),
+    ts: new Date(),
+  };
+}
+
+async function saveOperatorSettings(payload) {
+  await delay(600);
+  if (Math.random() < 0.08) throw new Error("sync rejected by node");
+  return { ...payload, savedAt: new Date() };
+}
+
+/* ---------------------------------------------------------
+   Small UI atoms
+--------------------------------------------------------- */
+function TagChip({ children }) {
+  return <span className="tag-chip">{children}</span>;
+}
+
+function fmtTime(d) {
+  return d.toTimeString().slice(0, 8);
+}
+
+/* ---------------------------------------------------------
+   Ticker — the signature element: a live cross-system log
+--------------------------------------------------------- */
+const SOURCE_COLOR = {
+  REDUX: "var(--accent-redux)",
+  CONTEXT: "var(--accent-context)",
+  QUERY: "var(--accent-query)",
+  STATE: "var(--accent-state)",
+};
+
+function Ticker() {
+  const { entries } = useLog();
+  return (
+    <div className="ticker">
+      <div className="ticker-head">
+        <span>live event signal</span>
+        <span>{entries.length} recent</span>
+      </div>
+      <div className="ticker-body">
+        {entries.length === 0 && (
+          <div className="ticker-empty">Waiting for the first state change… try any control below.</div>
+        )}
+        {entries.map(e => (
+          <div key={e.id} className="ticker-row" style={{ borderLeftColor: SOURCE_COLOR[e.source] }}>
+            <span className="t">{fmtTime(e.time)}</span>
+            <span className="tag" style={{ color: SOURCE_COLOR[e.source] }}>[{e.source}]</span>
+            <span className="msg">{e.message}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------
+   Panel 1 — Redux
+--------------------------------------------------------- */
+function ReduxPanel() {
+  const counter = useSelector(s => s.counter);
+  const tasks = useSelector(s => s.tasks);
+  const dispatch = useDispatch();
+  const { logEvent } = useLog();
+  const [draft, setDraft] = useState("");
+
+  const bump = (delta) => {
+    dispatch({ type: delta > 0 ? "COUNTER_INCREMENT" : "COUNTER_DECREMENT" });
+    logEvent("REDUX", `counter ${delta > 0 ? "incremented" : "decremented"} → ${counter + delta}`);
+  };
+  const reset = () => {
+    dispatch({ type: "COUNTER_RESET" });
+    logEvent("REDUX", "counter reset → 0");
+  };
+  const addTask = () => {
+    if (!draft.trim()) return;
+    dispatch({ type: "TASK_ADD", text: draft.trim() });
+    logEvent("REDUX", `task queued: "${draft.trim()}"`);
+    setDraft("");
+  };
+  const toggleTask = (id, text) => {
+    dispatch({ type: "TASK_TOGGLE", id });
+    logEvent("REDUX", `task toggled: "${text}"`);
+  };
+  const removeTask = (id, text) => {
+    dispatch({ type: "TASK_REMOVE", id });
+    logEvent("REDUX", `task removed: "${text}"`);
+  };
+
+  return (
+    <section className="panel panel-redux">
+      <div className="panel-head">
+        <TagChip>REDUX STORE</TagChip>
+        <span className="status-dot" />
+      </div>
+      <h2 className="panel-title">Mission counter &amp; task queue</h2>
+      <p className="panel-desc">Global store, dispatched actions, and a plain reducer — for testing action tracing and store-tree inspection.</p>
+
+      <div className="row" style={{ justifyContent: "center", gap: "1rem" }}>
+        <button onClick={() => bump(-1)} aria-label="decrement">−</button>
+        <span className="counter-value">{counter}</span>
+        <button onClick={() => bump(1)} aria-label="increment">+</button>
+      </div>
+      <div className="row" style={{ justifyContent: "center" }}>
+        <button onClick={reset}>reset</button>
+      </div>
+
+      <ul className="task-list">
+        {tasks.map(t => (
+          <li key={t.id} className={"task-item" + (t.done ? " done" : "")}>
+            <input type="checkbox" checked={t.done} onChange={() => toggleTask(t.id, t.text)} />
+            <span className="task-text">{t.text}</span>
+            <button className="task-remove" onClick={() => removeTask(t.id, t.text)}>remove</button>
+          </li>
+        ))}
+      </ul>
+      <div className="row" style={{ marginTop: "0.7rem" }}>
+        <input
+          type="text"
+          placeholder="new task…"
+          value={draft}
+          onChange={e => setDraft(e.target.value)}
+          onKeyDown={e => e.key === "Enter" && addTask()}
+          style={{ flex: 1 }}
+        />
+        <button className="primary" onClick={addTask}>add</button>
+      </div>
+    </section>
+  );
+}
+
+/* ---------------------------------------------------------
+   Panel 2 — Context API
+--------------------------------------------------------- */
+function ContextPanel() {
+  const { name, setName, role, setRole } = useOperator();
+  const { compact, toggleCompact } = useDisplay();
+  const { notifications, markRead, unreadCount } = useNotifications();
+  const { logEvent } = useLog();
+
+  return (
+    <section className="panel panel-context" style={{ padding: compact ? "1rem 1.1rem 1.2rem" : undefined }}>
+      <div className="panel-head">
+        <TagChip>CONTEXT API</TagChip>
+        <span className="status-dot" />
+      </div>
+      <h2 className="panel-title">Operator identity</h2>
+      <p className="panel-desc">Three nested providers — operator identity, display density, and a seeded alert feed — for testing provider-tree and consumer inspection.</p>
+
+      <label className="field-label">operator name</label>
+      <div className="row">
+        <input
+          type="text"
+          value={name}
+          onChange={e => setName(e.target.value)}
+          onBlur={() => logEvent("CONTEXT", `operator name changed → "${name}"`)}
+          style={{ flex: 1 }}
+        />
+      </div>
+
+      <div className="row">
+        <div style={{ flex: 1 }}>
+          <label className="field-label">role</label>
+          <select
+            value={role}
+            onChange={e => { setRole(e.target.value); logEvent("CONTEXT", `operator role changed → ${e.target.value}`); }}
+            style={{ width: "100%" }}
+          >
+            <option>Engineer</option>
+            <option>Analyst</option>
+            <option>Admin</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="row" style={{ marginTop: "1rem" }}>
+        <div
+          className={"switch" + (compact ? " on" : "")}
+          role="switch"
+          aria-checked={compact}
+          tabIndex={0}
+          onClick={() => { toggleCompact(); logEvent("CONTEXT", `display density → ${!compact ? "compact" : "comfortable"}`); }}
+          onKeyDown={e => e.key === "Enter" && toggleCompact()}
+        >
+          <div className="knob" />
+        </div>
+        <span style={{ fontSize: "0.82rem", color: "var(--text-dim)" }}>compact density</span>
+      </div>
+
+      <div className="readout">
+        <b>{name}</b> · {role} · density: <b>{compact ? "compact" : "comfortable"}</b>
+      </div>
+
+      <div className="alerts-head">
+        <label className="field-label">recent alerts (seeded)</label>
+        {unreadCount > 0 && <span className="unread-badge">{unreadCount} unread</span>}
+      </div>
+      <ul className="alert-list">
+        {notifications.map(n => (
+          <li
+            key={n.id}
+            className={"alert-item" + (n.read ? " read" : "")}
+            onClick={() => {
+              if (!n.read) { markRead(n.id); logEvent("CONTEXT", `alert marked read: "${n.text}"`); }
+            }}
+          >
+            <span className={"alert-dot " + n.type} />
+            <span className="alert-text">{n.text}</span>
+            <span className="alert-time">{n.time}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/* ---------------------------------------------------------
+   Panel 3 — React Query
+--------------------------------------------------------- */
+function QueryPanel() {
+  const { logEvent } = useLog();
+  const qc = useQueryClient();
+  const { name, role } = useOperator();
+
+  const statsQuery = useQuery(["systemStats"], fetchSystemStats, {
+    refetchInterval: 6000,
+    staleTime: 3000,
+    onSuccess: (data) => logEvent("QUERY", `systemStats refetched → cpu ${data.cpu}%`),
+  });
+
+  const saveMutation = useMutation(saveOperatorSettings, {
+    onSuccess: () => {
+      logEvent("QUERY", `settings synced for ${name} (${role})`);
+      qc.invalidateQueries(["systemStats"]);
+    },
+    onError: (err) => logEvent("QUERY", `settings sync failed — ${err.message}`),
+  });
+
+  const stats = statsQuery.data;
+
+  return (
+    <section className="panel panel-query">
+      <div className="panel-head">
+        <TagChip>REACT QUERY</TagChip>
+        <span className={"status-dot" + (statsQuery.isFetching ? " busy" : "")} />
+      </div>
+      <h2 className="panel-title">System telemetry</h2>
+      <p className="panel-desc">A polling query and a mutation — for testing cache keys, background refetch, and mutation status.</p>
+
+      <div className="stat-grid">
+        <div className="stat-box">
+          <div className="stat-label">cpu</div>
+          <div className="stat-value">{stats ? stats.cpu + "%" : "–"}</div>
+        </div>
+        <div className="stat-box">
+          <div className="stat-label">mem</div>
+          <div className="stat-value">{stats ? stats.mem + "%" : "–"}</div>
+        </div>
+        <div className="stat-box">
+          <div className="stat-label">latency</div>
+          <div className="stat-value">{stats ? stats.latency + "ms" : "–"}</div>
+        </div>
+      </div>
+
+      <div className="row">
+        <button onClick={() => { statsQuery.refetch(); logEvent("QUERY", "manual refetch requested"); }}>
+          {statsQuery.isFetching ? "refetching…" : "refetch now"}
+        </button>
+        <button
+          className="primary"
+          disabled={saveMutation.isLoading}
+          onClick={() => saveMutation.mutate({ name, role })}
+        >
+          {saveMutation.isLoading ? "syncing…" : "sync settings"}
+        </button>
+      </div>
+
+      <div className="readout">
+        query status: <b>{statsQuery.status}</b>{statsQuery.isFetching ? " (fetching)" : ""}<br/>
+        mutation status: <b>{saveMutation.status}</b><br/>
+        last updated: <b>{stats ? fmtTime(stats.ts) : "—"}</b>
+      </div>
+    </section>
+  );
+}
+
+/* ---------------------------------------------------------
+   Panel 4 — local component state (baseline, no library)
+--------------------------------------------------------- */
+function LocalStatePanel() {
+  const [count, setCount] = useState(0);
+  const [text, setText] = useState("");
+  const { logEvent } = useLog();
+
+  return (
+    <section className="panel panel-state">
+      <div className="panel-head">
+        <TagChip>LOCAL STATE</TagChip>
+        <span className="status-dot" />
+      </div>
+      <h2 className="panel-title">Plain component state</h2>
+      <p className="panel-desc">Ordinary <code style={{ fontFamily: "'IBM Plex Mono', monospace" }}>useState</code>, kept outside Redux/Context/Query — a baseline to confirm your extension tells the systems apart.</p>
+
+      <div className="row" style={{ justifyContent: "center", gap: "1rem" }}>
+        <button onClick={() => { setCount(c => c - 1); logEvent("STATE", `local counter → ${count - 1}`); }}>−</button>
+        <span className="counter-value">{count}</span>
+        <button onClick={() => { setCount(c => c + 1); logEvent("STATE", `local counter → ${count + 1}`); }}>+</button>
+      </div>
+
+      <label className="field-label" style={{ marginTop: "1rem", display: "block" }}>scratch input</label>
+      <input
+        type="text"
+        placeholder="type something…"
+        value={text}
+        onChange={e => setText(e.target.value)}
+        onBlur={() => text && logEvent("STATE", `scratch input → ${text.length} chars`)}
+        style={{ width: "100%" }}
+      />
+      <div className="readout">{text.length} character(s) in local state</div>
+    </section>
+  );
+}
+
+/* ---------------------------------------------------------
+   Shell + App
+--------------------------------------------------------- */
+function Shell() {
+  return (
+    <div className="shell">
+      <div className="topbar">
+        <div>
+          <p className="eyebrow">state inspector playground</p>
+          <h1 className="title">Signal Room</h1>
+          <p className="subtitle">
+            A single page wired to Redux, Context API, and React Query at once —
+            built to give a debugging extension something real to read.
+          </p>
+        </div>
+        <div className="live-badge">
+          <span className="live-dot" />
+          LIVE · 4 state sources
+        </div>
+      </div>
+
+      <Ticker />
+
+      <div className="grid">
+        <ReduxPanel />
+        <ContextPanel />
+        <QueryPanel />
+        <LocalStatePanel />
+      </div>
+
+      <p className="footer-note">
+        Store exposed at <code>window.__DEMO_STORE__</code>, query cache at <code>window.__DEMO_QUERY_CLIENT__</code>.
+        Redux DevTools hook is wired in if the extension is installed. Every control above logs to the ticker so you can
+        correlate what your extension reports against what actually happened, in order.
+      </p>
+    </div>
+  );
+}
+
+function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <Provider store={store}>
+        <LogProvider>
+          <OperatorProvider>
+            <DisplayProvider>
+              <NotificationsProvider>
+                <Shell />
+              </NotificationsProvider>
+            </DisplayProvider>
+          </OperatorProvider>
+        </LogProvider>
+      </Provider>
+    </QueryClientProvider>
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById("root"));
+root.render(<App />);
+</script>
+
+<script>
+  // Babel's default preset-react now targets the automatic JSX runtime, which
+  // compiles to `import { jsx as _jsx } from "react/jsx-runtime"` — an ES module
+  // statement that throws in a plain classic <script>, silently aborting the
+  // whole app (including Redux store creation) before anything runs.
+  // Forcing the classic runtime compiles to plain React.createElement calls instead.
+  const source = document.getElementById("app-source").textContent;
+  const { code } = Babel.transform(source, { presets: [["react", { runtime: "classic" }]] });
+  const script = document.createElement("script");
+  script.textContent = code;
+  document.body.appendChild(script);
+</script>
+</body>
+</html>

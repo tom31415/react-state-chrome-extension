@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Where Does This State Live? — A Field Guide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+  :root{
+    --paper:#eef0e8;
+    --paper-card:#f7f8f2;
+    --ink:#1f2921;
+    --ink-dim:#5b6459;
+    --ink-faint:#8b9285;
+    --line:#d3d6c8;
+
+    --redux:#6a3fd6;
+    --context:#0b8f83;
+    --query:#c23359;
+    --state:#a56a12;
+
+    --redux-tint:#efe9fb;
+    --context-tint:#e2f3f0;
+    --query-tint:#f9e6ec;
+    --state-tint:#f6ecdb;
+
+    --radius:12px;
+  }
+
+  *{ box-sizing:border-box; }
+
+  html,body{ margin:0; padding:0; background:var(--paper); color:var(--ink); font-family:'Inter', sans-serif; }
+  body{
+    background-image: radial-gradient(circle at 1px 1px, rgba(31,41,33,0.06) 1px, transparent 0);
+    background-size: 22px 22px;
+  }
+
+  ::selection{ background:var(--redux); color:#fff; }
+
+  .wrap{ max-width:920px; margin:0 auto; padding:3.5rem 1.5rem 5rem; }
+
+  .serif{ font-family:'Fraunces', serif; }
+  .mono{ font-family:'IBM Plex Mono', monospace; }
+
+  a{ color:var(--ink); }
+
+  /* hero */
+  .hero{ margin-bottom:3rem; }
+  .kicker{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.72rem;
+    letter-spacing:0.16em;
+    text-transform:uppercase;
+    color:var(--ink-faint);
+    margin:0 0 0.9rem;
+  }
+  h1.hero-title{
+    font-family:'Fraunces', serif;
+    font-weight:600;
+    font-size:clamp(2.1rem, 5vw, 3.1rem);
+    line-height:1.08;
+    margin:0 0 1rem;
+    letter-spacing:-0.01em;
+  }
+  .hero-title em{ font-style:italic; color:var(--redux); }
+  .hero-sub{
+    font-size:1.05rem;
+    color:var(--ink-dim);
+    max-width:56ch;
+    line-height:1.6;
+  }
+
+  /* decision helper */
+  .helper{
+    background:var(--paper-card);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:1.75rem;
+    margin-bottom:3.5rem;
+  }
+  .helper-label{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.7rem;
+    letter-spacing:0.12em;
+    text-transform:uppercase;
+    color:var(--ink-faint);
+    margin-bottom:1rem;
+  }
+  .q-step{ display:none; }
+  .q-step.active{ display:block; }
+  .q-text{ font-family:'Fraunces', serif; font-size:1.3rem; font-weight:600; margin:0 0 1.1rem; }
+  .q-options{ display:flex; gap:0.75rem; flex-wrap:wrap; }
+  .q-btn{
+    font-family:'Inter', sans-serif;
+    font-size:0.92rem;
+    font-weight:600;
+    padding:0.65rem 1.3rem;
+    border-radius:999px;
+    border:1.5px solid var(--ink);
+    background:transparent;
+    color:var(--ink);
+    cursor:pointer;
+    transition:background 0.15s ease, color 0.15s ease;
+  }
+  .q-btn:hover{ background:var(--ink); color:var(--paper); }
+  .q-progress{ display:flex; gap:0.35rem; margin-bottom:1.4rem; }
+  .q-progress span{ width:26px; height:4px; border-radius:2px; background:var(--line); }
+  .q-progress span.done{ background:var(--ink); }
+
+  .result{ display:none; }
+  .result.active{ display:block; }
+  .result-badge{
+    display:inline-flex;
+    align-items:center;
+    gap:0.5rem;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.78rem;
+    letter-spacing:0.08em;
+    padding:0.4rem 0.8rem;
+    border-radius:999px;
+    margin-bottom:0.9rem;
+  }
+  .result-title{ font-family:'Fraunces', serif; font-size:1.7rem; font-weight:600; margin:0 0 0.6rem; }
+  .result-body{ color:var(--ink-dim); line-height:1.6; margin:0 0 1.1rem; }
+  .restart-btn{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.78rem;
+    background:none;
+    border:1px solid var(--line);
+    border-radius:7px;
+    padding:0.45rem 0.8rem;
+    cursor:pointer;
+    color:var(--ink-dim);
+  }
+  .restart-btn:hover{ border-color:var(--ink); color:var(--ink); }
+
+  /* specimen cards */
+  .section-label{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.72rem;
+    letter-spacing:0.14em;
+    text-transform:uppercase;
+    color:var(--ink-faint);
+    margin:0 0 1.2rem;
+    padding-top:0.5rem;
+    border-top:1px solid var(--line);
+  }
+
+  .specimens{ display:grid; grid-template-columns:1fr 1fr; gap:1.25rem; margin-bottom:3.5rem; }
+  @media (max-width:760px){ .specimens{ grid-template-columns:1fr; } }
+
+  .card{
+    background:var(--paper-card);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:1.5rem;
+    position:relative;
+  }
+  .card-tab{
+    position:absolute;
+    top:-10px; left:1.3rem;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.66rem;
+    letter-spacing:0.1em;
+    font-weight:600;
+    padding:0.25rem 0.6rem;
+    border-radius:5px;
+    color:#fff;
+  }
+  .card-title{ font-family:'Fraunces', serif; font-size:1.35rem; font-weight:600; margin:0.6rem 0 0.4rem; }
+  .card-def{ color:var(--ink-dim); font-size:0.9rem; line-height:1.55; margin:0 0 1rem; }
+
+  .code{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.78rem;
+    line-height:1.6;
+    background:#1f2921;
+    color:#e7ebe2;
+    border-radius:8px;
+    padding:0.85rem 1rem;
+    overflow-x:auto;
+    margin:0 0 1rem;
+    white-space:pre;
+  }
+  .code .kw{ color:#9fd9ff; }
+  .code .fn{ color:#ffd479; }
+  .code .cm{ color:#7c8a76; }
+
+  .list-label{ font-family:'IBM Plex Mono', monospace; font-size:0.66rem; letter-spacing:0.08em; text-transform:uppercase; color:var(--ink-faint); margin:0.7rem 0 0.35rem; }
+  ul.plain{ margin:0; padding-left:1.1rem; font-size:0.86rem; color:var(--ink-dim); line-height:1.6; }
+
+  /* comparison table */
+  .table-wrap{ overflow-x:auto; margin-bottom:3.5rem; }
+  table{ width:100%; border-collapse:collapse; font-size:0.86rem; }
+  th, td{ text-align:left; padding:0.7rem 0.8rem; border-bottom:1px solid var(--line); vertical-align:top; }
+  th{ font-family:'IBM Plex Mono', monospace; font-size:0.68rem; letter-spacing:0.08em; text-transform:uppercase; color:var(--ink-faint); font-weight:600; }
+  td.dim{ font-family:'IBM Plex Mono', monospace; font-size:0.72rem; color:var(--ink-faint); white-space:nowrap; }
+  tr:last-child td{ border-bottom:none; }
+
+  .footer-note{
+    padding-top:1.5rem;
+    border-top:1px solid var(--line);
+    color:var(--ink-faint);
+    font-size:0.82rem;
+    line-height:1.7;
+  }
+  .footer-note code{ font-family:'IBM Plex Mono', monospace; background:var(--paper-card); padding:0.1rem 0.4rem; border-radius:4px; }
+
+  @media (prefers-reduced-motion: reduce){ *{ transition:none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="hero">
+    <p class="kicker">field guide · state management</p>
+    <h1 class="hero-title">Where does this <em>state</em> live?</h1>
+    <p class="hero-sub">Every piece of state answers one question: who else needs to see it, and how fresh does it have to stay? Answer that, and the right tool follows. This guide walks through the four you'll meet most often — local state, Context, Redux, and React Query.</p>
+  </div>
+
+  <div class="helper">
+    <p class="helper-label">quick decision helper — answer three questions</p>
+    <div class="q-progress" id="progress">
+      <span id="p0"></span><span id="p1"></span><span id="p2"></span>
+    </div>
+
+    <div class="q-step active" id="step0">
+      <p class="q-text">Does this data come from a server — an API, a database, anything fetched over the network?</p>
+      <div class="q-options">
+        <button class="q-btn" onclick="answer(0,'yes')">Yes, it's fetched</button>
+        <button class="q-btn" onclick="answer(0,'no')">No, it's client-only</button>
+      </div>
+    </div>
+
+    <div class="q-step" id="step1">
+      <p class="q-text">Does more than one distant component need to read it?</p>
+      <div class="q-options">
+        <button class="q-btn" onclick="answer(1,'yes')">Yes, it's shared</button>
+        <button class="q-btn" onclick="answer(1,'no')">No, one component owns it</button>
+      </div>
+    </div>
+
+    <div class="q-step" id="step2">
+      <p class="q-text">Does it change often, from many places, or need time-travel debugging and middleware?</p>
+      <div class="q-options">
+        <button class="q-btn" onclick="answer(2,'yes')">Yes, it's complex</button>
+        <button class="q-btn" onclick="answer(2,'no')">No, it's fairly simple</button>
+      </div>
+    </div>
+
+    <div class="result" id="result">
+      <span class="result-badge" id="resultBadge"></span>
+      <h3 class="result-title" id="resultTitle"></h3>
+      <p class="result-body" id="resultBody"></p>
+      <button class="restart-btn" onclick="restart()">start over</button>
+    </div>
+  </div>
+
+  <p class="section-label">the four systems</p>
+
+  <div class="specimens">
+
+    <div class="card">
+      <span class="card-tab" style="background:var(--state)">LOCAL STATE</span>
+      <h3 class="card-title">useState</h3>
+      <p class="card-def">State that one component owns and no one else needs. The default until proven otherwise.</p>
+      <div class="code"><span class="kw">const</span> [count, setCount] = <span class="fn">useState</span>(0);</div>
+      <p class="list-label">reach for it when</p>
+      <ul class="plain">
+        <li>Only this component and its children care</li>
+        <li>It resets fine on unmount</li>
+        <li>Form fields, toggles, hover state, scratch input</li>
+      </ul>
+      <p class="list-label">skip it when</p>
+      <ul class="plain"><li>Two unrelated components need to stay in sync</li></ul>
+    </div>
+
+    <div class="card">
+      <span class="card-tab" style="background:var(--context)">CONTEXT API</span>
+      <h3 class="card-title">Context</h3>
+      <p class="card-def">A way to pass a value down the tree without threading props through every level in between.</p>
+      <div class="code"><span class="kw">const</span> Theme = <span class="fn">createContext</span>();
+<span class="cm">// &lt;Theme.Provider value={...}&gt;</span></div>
+      <p class="list-label">reach for it when</p>
+      <ul class="plain">
+        <li>Theme, locale, auth session, feature flags</li>
+        <li>Reads are far more common than writes</li>
+        <li>You want plain React, no extra library</li>
+      </ul>
+      <p class="list-label">skip it when</p>
+      <ul class="plain"><li>Value updates rapidly — every consumer re-renders</li></ul>
+    </div>
+
+    <div class="card">
+      <span class="card-tab" style="background:var(--redux)">REDUX</span>
+      <h3 class="card-title">Redux</h3>
+      <p class="card-def">A single store for client state, updated only through dispatched actions — predictable, traceable, inspectable.</p>
+      <div class="code"><span class="kw">dispatch</span>({ <span class="fn">type</span>: <span class="cm">'task/added'</span> });</div>
+      <p class="list-label">reach for it when</p>
+      <ul class="plain">
+        <li>State is large, shared, and updated from many places</li>
+        <li>You want action history, time travel, middleware</li>
+        <li>Several teams touch the same slice of state</li>
+      </ul>
+      <p class="list-label">skip it when</p>
+      <ul class="plain"><li>The data actually comes from a server — that's a cache problem, not a store problem</li></ul>
+    </div>
+
+    <div class="card">
+      <span class="card-tab" style="background:var(--query)">REACT QUERY</span>
+      <h3 class="card-title">React Query</h3>
+      <p class="card-def">Not state management — cache management. It tracks server data: fetching, retries, staleness, refetching.</p>
+      <div class="code"><span class="kw">const</span> { data } = <span class="fn">useQuery</span>([<span class="cm">'stats'</span>], fetchStats);</div>
+      <p class="list-label">reach for it when</p>
+      <ul class="plain">
+        <li>Data is fetched, and can go stale</li>
+        <li>You want loading/error states for free</li>
+        <li>Polling, pagination, background refetch</li>
+      </ul>
+      <p class="list-label">skip it when</p>
+      <ul class="plain"><li>The value never touches a network — plain state or Context does it with less overhead</li></ul>
+    </div>
+
+  </div>
+
+  <p class="section-label">side by side</p>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>&nbsp;</th><th>Local state</th><th>Context</th><th>Redux</th><th>React Query</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="dim">scope</td>
+          <td>one component</td>
+          <td>a subtree</td>
+          <td>whole app</td>
+          <td>whole app</td>
+        </tr>
+        <tr>
+          <td class="dim">data origin</td>
+          <td>client</td>
+          <td>client</td>
+          <td>client</td>
+          <td>server</td>
+        </tr>
+        <tr>
+          <td class="dim">boilerplate</td>
+          <td>none</td>
+          <td>low</td>
+          <td>moderate</td>
+          <td>low</td>
+        </tr>
+        <tr>
+          <td class="dim">devtools</td>
+          <td>React DevTools</td>
+          <td>React DevTools</td>
+          <td>action log, time travel</td>
+          <td>query cache inspector</td>
+        </tr>
+        <tr>
+          <td class="dim">re-render cost</td>
+          <td>local only</td>
+          <td>every consumer on change</td>
+          <td>only connected components</td>
+          <td>only subscribed queries</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="footer-note">
+    All four are wired up live in the companion demo, <code>signal-room.html</code> — open it alongside your debugging
+    extension to see each system update in real time, cross-referenced against its event log.
+  </p>
+
+</div>
+
+<script>
+  const answers = {};
+  const outcomes = {
+    // q0-yes -> always React Query, regardless of the rest
+    'yes': {
+      badge: 'REACT QUERY', color: 'var(--query)', tint: 'var(--query-tint)',
+      title: 'Reach for React Query',
+      body: "It's fetched, so it's a caching problem, not a state problem. React Query gives you loading and error states, retries, and background refetching without hand-rolled useEffect chains."
+    },
+    'no-no': {
+      badge: 'LOCAL STATE', color: 'var(--state)', tint: 'var(--state-tint)',
+      title: 'Reach for useState',
+      body: "Client-only, and only one component needs it. Anything more is premature — start local, lift it later if a sibling ever needs to read it."
+    },
+    'no-yes-no': {
+      badge: 'CONTEXT API', color: 'var(--context)', tint: 'var(--context-tint)',
+      title: 'Reach for Context',
+      body: "Shared, client-only, and simple. Context avoids prop drilling without pulling in a library — a good fit for theme, locale, or session data that changes rarely."
+    },
+    'no-yes-yes': {
+      badge: 'REDUX', color: 'var(--redux)', tint: 'var(--redux-tint)',
+      title: 'Reach for Redux',
+      body: "Shared and complex enough to want structure: predictable updates, an action log, and time-travel debugging. Worth the extra ceremony once state gets this tangled."
+    }
+  };
+
+  function showStep(n){
+    document.querySelectorAll('.q-step').forEach(el => el.classList.remove('active'));
+    document.getElementById('step' + n).classList.add('active');
+    for(let i=0;i<3;i++){
+      document.getElementById('p'+i).classList.toggle('done', i < n);
+    }
+  }
+
+  function answer(step, val){
+    answers[step] = val;
+    if(step === 0 && val === 'yes'){
+      finish('yes');
+      return;
+    }
+    if(step === 1 && val === 'no'){
+      finish('no-no');
+      return;
+    }
+    if(step === 2){
+      finish('no-yes-' + val);
+      return;
+    }
+    showStep(step + 1);
+  }
+
+  function finish(key){
+    document.querySelectorAll('.q-step').forEach(el => el.classList.remove('active'));
+    for(let i=0;i<3;i++){ document.getElementById('p'+i).classList.add('done'); }
+    const o = outcomes[key];
+    const badge = document.getElementById('resultBadge');
+    badge.textContent = o.badge;
+    badge.style.background = o.tint;
+    badge.style.color = o.color;
+    document.getElementById('resultTitle').textContent = o.title;
+    document.getElementById('resultTitle').style.color = o.color;
+    document.getElementById('resultBody').textContent = o.body;
+    document.getElementById('result').classList.add('active');
+  }
+
+  function restart(){
+    document.getElementById('result').classList.remove('active');
+    for(let i=0;i<3;i++){ document.getElementById('p'+i).classList.remove('done'); }
+    showStep(0);
+  }
+
+  showStep(0);
+</script>
+
+</body>
+</html>
