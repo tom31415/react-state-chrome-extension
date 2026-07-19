@@ -1,6 +1,6 @@
 {
   "name": "react-state-inspector",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "private": true,
   "description": "Chrome DevTools extension: inspect React (15+) components and view/edit Redux and React Query state live.",
   "type": "module",

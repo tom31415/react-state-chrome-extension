@@ -25,6 +25,7 @@ async function copyStatic() {
   await cp('src/devtools/devtools.html', 'dist/devtools.html');
   await cp('src/devtools/panel/panel.html', 'dist/panel/panel.html');
   await cp('src/devtools/panel/panel.css', 'dist/panel/panel.css');
+  await cp('icons', 'dist/icons', { recursive: true });
 }
 
 if (watch) {
