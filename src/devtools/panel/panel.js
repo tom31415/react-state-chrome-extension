@@ -142,6 +142,7 @@ function onPortMessage(msg) {
         if (state.historyPaneOpen) requestStoreHistory(state.selectedStoreId);
       }
       renderStores();
+      renderEnv();
       break;
     case 'store-state':
       state.storeStates.set(msg.storeId, msg.state);
