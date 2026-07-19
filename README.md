@@ -113,6 +113,24 @@ by object shape (fibers for 16+, internal instances for 15), and applies state e
 - Values that aren't plain JSON (functions, Maps, class instances…) are shown but not
   editable as a whole.
 
+## Privacy policy
+
+This extension does not collect, transmit, or store any user data off-device.
+
+- **No network calls.** The extension makes no `fetch`, `XMLHttpRequest`, or similar
+  requests to any server — there is no backend, no analytics, no telemetry, no
+  crash reporting.
+- **No persistent storage.** No `chrome.storage`, cookies, or `localStorage` are used
+  by the extension itself. Nothing survives closing DevTools.
+- **Local only.** All inspection happens between the inspected tab, the extension's
+  own background service worker, and the DevTools panel — all running on your
+  machine. Nothing is sent to the extension author or any third party.
+- **Why `<all_urls>`?** The extension is a DevTools panel: it must be able to inject
+  its page agent into whichever page the developer opens DevTools on — localhost,
+  staging domains, production sites, internal tools. The page agent only runs on
+  tabs where the developer has DevTools open, and it reads React/Redux/React Query
+  state exclusively to display it in the panel.
+
 ## Chrome Web Store
 
 Assets and copy for publishing live at the repo root:
