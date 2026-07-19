@@ -31,6 +31,11 @@ select the `dist/` directory. Open DevTools on any React page and switch to the
 `demo/index.html` is a ready-made playground (React 18 + Redux + react-redux via CDN)
 with a class component, a hooks component, and two stores.
 
+For a richer testbed, `demo/signal-room/signal-room.html` wires Redux, Context API,
+and React Query into a single page — the same page used to capture the Chrome Web
+Store screenshots. Serve the repo with `python3 -m http.server 8000` and open
+`http://localhost:8000/demo/signal-room/signal-room.html`.
+
 ## How store discovery works
 
 | Tier | How the store is found | Edit behavior |
@@ -107,3 +112,18 @@ by object shape (fibers for 16+, internal instances for 15), and applies state e
   `connect()`, and manual subscribers repaint immediately.
 - Values that aren't plain JSON (functions, Maps, class instances…) are shown but not
   editable as a whole.
+
+## Chrome Web Store
+
+Assets and copy for publishing live at the repo root:
+
+- `STORE_LISTING.md` — dashboard copy (short/detailed description, category, single-purpose
+  statement, and per-permission justifications).
+- `store-assets/` — the required promo tile (440×280) and the panel screenshots (1280×800),
+  plus a README documenting each asset.
+
+To publish: `npm run build`, zip the **contents** of `dist/` (the zip's top level must
+contain `manifest.json`), upload to the [Chrome Web Store Developer Dashboard][cws], and
+paste the fields from `STORE_LISTING.md` and the images from `store-assets/`.
+
+[cws]: https://chrome.google.com/webstore/devconsole
